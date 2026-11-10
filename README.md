@@ -13,6 +13,10 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 - **Online (khi mở qua link claude.ai):** mỗi người chơi trên máy của mình. Người mở trước ngồi ghế 1, người thứ hai ngồi ghế 2, ai mở sau nữa chỉ được xem. Chỉ người tới lượt mới ngắm, kéo lực và đánh được. Người còn lại xem bi chạy trực tiếp. Xếp lại bàn hoặc chơi ván mới cần **cả hai đồng ý**. Trạng thái bàn được lưu bằng capability `db` của artifact (`tables/main`).
 - **Chung một máy (mở `index.html` trực tiếp):** hai người thay phiên trên cùng một máy.
 
+## Sảnh
+
+Khi mở game sẽ có trang sảnh để nhập **tên**, chọn **avatar** (một trong 15 viên bi), **màu bàn** (navy, xanh lục bảo, đỏ rượu vang, xám than; do người tạo phòng chọn) và **màu gậy** (gỗ phong, đen carbon, đỏ ruby, vàng đồng). Tên và avatar được gửi sang máy bên kia. Trong ván bấm ⚙ để đổi lại. Lựa chọn được nhớ trên máy cho lần sau.
+
 ## Điều khiển
 
 - **Ngắm:** chạm hoặc kéo trên bàn. Kéo thanh xoay (bên phải khi xoay ngang, góc dưới bên phải khi cầm dọc) để ngắm tinh.

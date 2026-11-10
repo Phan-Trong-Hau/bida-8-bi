@@ -40,11 +40,12 @@
 
   .app.vert {
     display: grid; grid-template-columns: 34px 1fr 52px 1fr; align-content: center; justify-content: stretch;
-    grid-template-areas: "reset who0 . who1" "table table table table" "pull pull spin wheel";
+    grid-template-areas: "reset who0 gear who1" "table table table table" "pull pull spin wheel";
   }
   .vert #spinBtn { grid-area: spin; justify-self: center; align-self: center; }
   .vert .col { display: contents; }
   .vert #resetBtn { grid-area: reset; }
+  .vert #gearBtn { grid-area: gear; justify-self: center; }
   .vert #who0 { grid-area: who0; flex-direction: row; justify-self: start; }
   .vert #who1 { grid-area: who1; flex-direction: row-reverse; justify-self: end; }
   .vert .table-wrap { grid-area: table; justify-self: center; }
@@ -109,6 +110,40 @@
     border: 1px solid var(--line); background: var(--panel); color: var(--ink); touch-action: manipulation;
   }
   button.primary { background: var(--brass); color: #1b1408; border-color: var(--brass); }
+  .ballav {
+    width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
+    box-shadow: inset -3px -3px 6px rgba(0,0,0,.35), inset 2px 2px 4px rgba(255,255,255,.25);
+  }
+  .ballav i {
+    font-style: normal; background: #f4f1e8; color: #111; border-radius: 50%; width: 54%; height: 54%;
+    display: grid; place-items: center; font: 700 11px/1 var(--body);
+  }
+  .lobby {
+    position: fixed; inset: 0; z-index: 50; overflow-y: auto; background: var(--room);
+    padding-block: max(20px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .lobby-card { max-width: 520px; margin: 0 auto; display: grid; gap: 18px; }
+  .lobby h1 { margin: 0; font-family: var(--display); font-size: 38px; letter-spacing: .05em; text-transform: uppercase; }
+  .lobby h1 span { color: var(--brass); }
+  .lb-note { margin: -10px 0 0; color: var(--muted); font-size: 14px; }
+  .field { display: grid; gap: 8px; }
+  .field .lbl { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .field input {
+    font: inherit; font-size: 17px; padding: 10px 12px; border-radius: 10px; min-width: 0;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  .field input:focus-visible { outline: 2px solid var(--chalk); outline-offset: 1px; }
+  .balls { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 8px; }
+  .pick { padding: 2px; min-height: 0; aspect-ratio: 1; border-radius: 50%; border: 2px solid transparent; background: none; }
+  .pick[aria-pressed="true"] { border-color: var(--brass); box-shadow: 0 0 0 3px rgba(216,169,79,.3); }
+  .swatches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .sw { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; text-align: left; font-weight: 500; min-width: 0; }
+  .sw[aria-pressed="true"] { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+  .chip { flex: none; width: 34px; height: 24px; border-radius: 6px; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
+  .chip.cue { width: 46px; height: 8px; border-radius: 4px; }
+  .lb-go { width: 100%; min-height: 52px; font-size: 17px; }
   .reset { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); flex: none; }
   .reset.waiting { color: var(--brass); border-color: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(216,169,79,.25); } }
@@ -168,6 +203,7 @@
 <div class="app" id="app">
   <div class="col" id="colL">
     <button class="reset" id="resetBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
+    <button class="reset" id="gearBtn" aria-label="Tên, avatar, màu bàn và gậy" title="Tuỳ chỉnh">⚙&#xFE0E;</button>
     <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><div class="rack" id="rack0"></div></div>
     <div class="pull" id="pull" role="slider" tabindex="0" aria-label="Lực đánh — kéo rồi thả để đánh" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="pull-fill" id="pullFill"></div>
@@ -214,6 +250,18 @@
   </div>
 </div>
 
+<div class="lobby" id="lobby" hidden>
+  <div class="lobby-card">
+    <h1>Bida <span>8</span> Bi</h1>
+    <p class="lb-note" id="lbNote"></p>
+    <div class="field"><label class="lbl" for="lbName">Tên của bạn</label><input id="lbName" maxlength="16" autocomplete="nickname" placeholder="Nhập tên"></div>
+    <div class="field"><span class="lbl">Avatar</span><div class="balls" id="lbBalls" role="group" aria-label="Chọn bi làm avatar"></div></div>
+    <div class="field" id="lbFeltField"><span class="lbl">Màu bàn</span><div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div></div>
+    <div class="field"><span class="lbl">Màu gậy</span><div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div></div>
+    <button class="primary lb-go" id="lbGo">Bắt đầu</button>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
@@ -233,6 +281,32 @@
   const canvas = $('table');
   const pull = $('pull'), wheel = $('wheel');
   const rid = () => Math.random().toString(36).slice(2, 10);
+  const FELTS = {
+    navy: { name: 'Navy hoàng gia', felt: 0x1a4370, cush: 0x102c49 },
+    emerald: { name: 'Xanh lục bảo', felt: 0x0d5c45, cush: 0x09473a },
+    wine: { name: 'Đỏ rượu vang', felt: 0x6a1b2a, cush: 0x4e1220 },
+    slate: { name: 'Xám than', felt: 0x3a4148, cush: 0x2b3137 },
+  };
+  const CUES = {
+    maple: { name: 'Gỗ phong', shaft: 0xe3c48f, ring: 0xd8a94f, butt: 0x2b170c },
+    carbon: { name: 'Đen carbon', shaft: 0x2a2d31, ring: 0xb8bec6, butt: 0x101113 },
+    ruby: { name: 'Đỏ ruby', shaft: 0xe3c48f, ring: 0xd8a94f, butt: 0x7a1424 },
+    gold: { name: 'Vàng đồng', shaft: 0xf0d9a8, ring: 0x2b170c, butt: 0xb8862e },
+  };
+  const hexCss = n => '#' + n.toString(16).padStart(6, '0');
+  // Lựa chọn riêng của người chơi trên máy này
+  const prefs = (() => {
+    let p = {}; try { p = JSON.parse(localStorage.getItem('bida.prefs') || '{}') || {}; } catch (e) {}
+    const ball = Math.round(+p.ball);
+    return {
+      name: typeof p.name === 'string' ? p.name.slice(0, 16) : '',
+      ball: ball >= 1 && ball <= 15 ? ball : 0,
+      felt: FELTS[p.felt] ? p.felt : 'navy',
+      cue: CUES[p.cue] ? p.cue : 'maple',
+    };
+  })();
+  const savePrefs = () => { try { localStorage.setItem('bida.prefs', JSON.stringify(prefs)); } catch (e) {} };
+  let started = false;
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   let vert = false, cueDrag = false;
 
@@ -268,6 +342,7 @@
       event: { id: rid(), kind: 'start', who: b }, shot: null,
       seats: prev ? { ...prev.seats } : { p0: null, p1: null },
       reset: { p0: false, p1: false }, seq: (prev ? prev.seq : 0) + 1,
+      players: prev ? { ...prev.players } : { p0: null, p1: null }, felt: prev ? prev.felt : 'navy',
     };
   }
 
@@ -277,6 +352,7 @@
       ...base, ...d,
       seats: { ...base.seats, ...(d.seats || {}) }, reset: { ...base.reset, ...(d.reset || {}) },
       groups: { ...base.groups, ...(d.groups || {}) }, wins: { ...base.wins, ...(d.wins || {}) },
+      players: { ...base.players, ...(d.players || {}) }, felt: FELTS[d.felt] ? d.felt : 'navy',
       event: d.event || { id: '', kind: 'start', who: 0 },
     };
   }
@@ -297,7 +373,7 @@
   function merge(s, p) {
     const o = { ...s };
     for (const k in p) {
-      if (['seats', 'reset', 'groups', 'wins'].includes(k) && p[k] && typeof p[k] === 'object') o[k] = { ...s[k], ...p[k] };
+      if (['seats', 'reset', 'groups', 'wins', 'players'].includes(k) && p[k] && typeof p[k] === 'object') o[k] = { ...s[k], ...p[k] };
       else o[k] = p[k];
     }
     return o;
@@ -604,7 +680,7 @@
       await withLock(async () => {
         const snap = await mainRef.get();
         if (snap.exists) return;
-        const ns = freshState(null); ns.seats.p0 = myId;
+        const ns = freshState(null); ns.seats.p0 = myId; ns.felt = prefs.felt;
         await mainRef.set(ns);
       });
     } catch (e) { console.warn('create', e); }
@@ -692,6 +768,7 @@
           if (gotState) return;
           gotState = true; online = true; synced = true;
           claimIfFree();
+          commit({ felt: prefs.felt });
           showInvite();
         }, 1500);
       });
@@ -877,14 +954,26 @@
   function stickPart(from, to, r1, r2, color) {
     const len = to - from;
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 18), stdMat(color, { roughness: .35 }));
-    m.rotation.z = -Math.PI / 2; m.position.x = -(from + len / 2); m.castShadow = true; m.renderOrder = 3; stickInner.add(m);
+    m.rotation.z = -Math.PI / 2; m.position.x = -(from + len / 2); m.castShadow = true;
+    // gậy luôn nằm trên bàn: vẽ sau cùng, không bị thành gỗ hay mặt bàn che
+    m.material.depthTest = false; m.renderOrder = 6; stickInner.add(m);
   }
   stickPart(0, 4, 2.5, 2.6, 0x3f8fc0);
   stickPart(4, 14, 2.6, 2.7, 0xf4f1e8);
   stickPart(14, 270, 2.7, 3.6, 0xe3c48f);
   stickPart(270, 292, 3.6, 3.8, 0xd8a94f);
   stickPart(292, 430, 3.8, 5, 0x2b170c);
-  stickInner.rotation.z = -0.07;
+  stickInner.rotation.z = -0.1;
+  const stickMats = stickInner.children.map(m => m.material); // đầu, khâu, thân, khoen, chuôi
+  function applyCue(key) {
+    const c = CUES[key] || CUES.maple;
+    stickMats[2].color.setHex(c.shaft); stickMats[3].color.setHex(c.ring); stickMats[4].color.setHex(c.butt);
+  }
+  let appliedFelt = 'navy';
+  function applyFelt(key) {
+    const f = FELTS[key] || FELTS.navy;
+    feltM.color.setHex(f.felt); cushionM.color.setHex(f.cush); appliedFelt = key;
+  }
 
   // đường ngắm
   const lineOf = mat => {
@@ -983,22 +1072,44 @@
   }
 
   // ---------- Giao diện ----------
+  function playerInfo(i) {
+    if (!online) return i === 0 ? { name: prefs.name, ball: prefs.ball } : null;
+    const pl = S.players['p' + i];
+    return pl && typeof pl === 'object' ? pl : null;
+  }
   function whoName(i) {
-    if (!online) return 'Người ' + (i + 1);
+    const pl = playerInfo(i), custom = pl && typeof pl.name === 'string' ? pl.name.slice(0, 16).trim() : '';
+    if (!online) return custom || 'Người ' + (i + 1);
     const id = S.seats['p' + i];
     if (id && id === myId) return 'bạn';
-    return (id && profiles[id] && profiles[id].name) || 'Người ' + (i + 1);
+    return custom || (id && profiles[id] && profiles[id].name) || 'Người ' + (i + 1);
+  }
+  function ballBg(n) {
+    return n > 8 ? `linear-gradient(#f4f1e8 0 24%, ${colorOf(n)} 24% 76%, #f4f1e8 76%)` : colorOf(n);
+  }
+  function ballAvatar(n) {
+    const b = document.createElement('span'); b.className = 'ballav'; b.style.background = ballBg(n);
+    const t = document.createElement('i'); t.textContent = n; b.appendChild(t); return b;
+  }
+  // gửi tên và avatar của mình cho máy bên kia khi khác với bàn đang lưu
+  function announceMe() {
+    if (!online || !started) return;
+    const me = mySeat(); if (me < 0) return;
+    const cur = S.players['p' + me] || {};
+    if (cur.name !== prefs.name || cur.ball !== prefs.ball) commit({ players: { ['p' + me]: { name: prefs.name, ball: prefs.ball } } });
   }
 
   function paintAvatar(el, i) {
     const id = online ? S.seats['p' + i] : null;
     const url = id && profiles[id] ? profiles[id].avatarUrl : '';
     const label = online && !id ? '+' : String(i + 1);
-    const key = url + '|' + label;
+    const pl = playerInfo(i), ball = pl ? Math.round(+pl.ball) : 0;
+    const key = url + '|' + label + '|' + ball;
     if (el.dataset.k === key) return;
     el.dataset.k = key;
     el.textContent = '';
-    if (url) {
+    if (ball >= 1 && ball <= 15) el.appendChild(ballAvatar(ball));
+    else if (url) {
       const img = document.createElement('img');
       img.alt = ''; img.src = url;
       img.onerror = () => { el.textContent = label; };
@@ -1031,6 +1142,7 @@
   $('toast').addEventListener('animationend', () => { $('toast').hidden = true; });
 
   function renderUI() {
+    if (S.felt !== appliedFelt) applyFelt(S.felt);
     const me = mySeat();
     [0, 1].forEach(i => {
       const el = $('who' + i), key = 'p' + i;
@@ -1052,6 +1164,7 @@
         }
       }
     });
+    announceMe();
     pull.classList.toggle('off', !isAiming());
     wheel.classList.toggle('off', !isAiming());
     $('spinBtn').classList.toggle('off', !isAiming());
@@ -1233,13 +1346,77 @@
     requestAnimationFrame(loop);
   }
 
+  // ---------- Sảnh: tên, avatar, màu bàn, màu gậy ----------
+  let lobbyMode = 'start';
+  const hasNet = () => !!(window.claude && window.claude.use) || !!window.mqtt;
+  const invited = () => !(window.claude && window.claude.use) && /^#r-[a-z0-9]+$/.test(location.hash);
+  function pressList(el, sel, key) { for (const b of el.children) b.setAttribute('aria-pressed', b.dataset.k === String(sel)); }
+  function buildLobby() {
+    const balls = $('lbBalls');
+    for (let n = 1; n <= 15; n++) {
+      const b = document.createElement('button'); b.className = 'pick'; b.dataset.k = n; b.setAttribute('aria-label', 'Bi ' + n);
+      b.appendChild(ballAvatar(n));
+      b.addEventListener('click', () => { prefs.ball = n; pressList(balls, n); });
+      balls.appendChild(b);
+    }
+    const swatch = (el, list, field, chip) => {
+      for (const [k, v] of Object.entries(list)) {
+        const b = document.createElement('button'); b.className = 'sw'; b.dataset.k = k;
+        const c = document.createElement('span'); c.className = 'chip' + (chip === 'cue' ? ' cue' : '');
+        c.style.background = chip === 'cue'
+          ? `linear-gradient(90deg, ${hexCss(v.butt)} 0 32%, ${hexCss(v.ring)} 32% 37%, ${hexCss(v.shaft)} 37% 96%, #3f8fc0 96%)`
+          : hexCss(v.felt);
+        const t = document.createElement('span'); t.textContent = v.name;
+        b.append(c, t);
+        b.addEventListener('click', () => {
+          prefs[field] = k; pressList(el, k);
+          if (field === 'cue') applyCue(k);
+          if (field === 'felt' && (!online || mySeat() === 0 || lobbyMode === 'start')) applyFelt(k);
+        });
+        el.appendChild(b);
+      }
+    };
+    swatch($('lbFelts'), FELTS, 'felt', 'felt');
+    swatch($('lbCues'), CUES, 'cue', 'cue');
+    $('lbGo').addEventListener('click', lobbyGo);
+    $('lbName').addEventListener('keydown', e => { if (e.key === 'Enter') lobbyGo(); });
+  }
+  function openLobby(mode) {
+    lobbyMode = mode;
+    $('lbName').value = prefs.name;
+    pressList($('lbBalls'), prefs.ball); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
+    const canFelt = mode === 'start' ? !invited() : (!online || mySeat() === 0);
+    $('lbFeltField').hidden = !canFelt;
+    $('lbNote').textContent = mode === 'start' && invited() ? 'Bạn được mời vào một bàn. Màu bàn do người tạo phòng chọn.' : '';
+    $('lbGo').textContent = mode !== 'start' ? 'Xong' : invited() || (window.claude && window.claude.use) ? 'Vào bàn' : window.mqtt ? 'Tạo phòng' : 'Bắt đầu';
+    $('lobby').hidden = false;
+  }
+  function lobbyGo() {
+    prefs.name = $('lbName').value.trim().slice(0, 16);
+    savePrefs(); applyCue(prefs.cue);
+    $('lobby').hidden = true;
+    audio();
+    if (lobbyMode === 'start') {
+      started = true;
+      if (!hasNet()) { S.felt = prefs.felt; renderUI(); popup(S.event); }
+      initOnline().catch(e => console.warn('online', e));
+    } else if (online) {
+      announceMe();
+      if (mySeat() === 0 && S.felt !== prefs.felt) commit({ felt: prefs.felt });
+      else applyFelt(S.felt);
+    } else { S.felt = prefs.felt; renderUI(); }
+  }
+  $('gearBtn').addEventListener('click', () => openLobby('settings'));
+
   S = freshState(null);
+  S.felt = prefs.felt;
   loadBalls(S.balls);
+  applyCue(prefs.cue);
   layout();
   renderUI();
-  popup(S.event);
   requestAnimationFrame(loop);
-  initOnline().catch(e => console.warn('online', e));
+  buildLobby();
+  openLobby('start');
 })();
 </script>
 <!-- ARTIFACT:END -->
