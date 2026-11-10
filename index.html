@@ -307,13 +307,14 @@
   }
 
   // ---------- Âm thanh (Web Audio, tự tổng hợp) ----------
-  let actx = null, noiseBuf = null, sndWindow = 0, sndCount = 0;
+  let actx = null, master = null, bufs = null, sndWindow = 0, sndCount = 0;
   function audio() {
     if (!actx) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
       actx = new AC();
-      const len = actx.sampleRate * .5; noiseBuf = actx.createBuffer(1, len, actx.sampleRate);
-      const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      master = actx.createDynamicsCompressor();
+      master.threshold.value = -14; master.ratio.value = 6; master.connect(actx.destination);
+      buildSounds();
     }
     if (actx.state === 'suspended') actx.resume().catch(() => {});
     return actx;
@@ -321,32 +322,81 @@
   // trình duyệt chỉ cho phát tiếng sau lần chạm đầu tiên
   window.addEventListener('pointerdown', () => audio(), { capture: true });
   function canPlay() {
-    if (!actx || actx.state !== 'running') return false;
+    if (!actx || !bufs || actx.state !== 'running') return false;
     const t = performance.now(); if (t - sndWindow > 40) { sndWindow = t; sndCount = 0; }
     return ++sndCount <= 4;
   }
-  function tone(freq, dur, vol, type, freqEnd, delay = 0) {
-    const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
-    o.type = type; o.frequency.setValueAtTime(freq, t);
-    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + .02);
+  // Âm thanh mô phỏng vật lý: tạo sẵn từng mẫu (dao động tắt rất nhanh ở các tần số lẻ của bi nhựa cứng)
+  function mkBuf(dur, fn) {
+    const sr = actx.sampleRate, n = Math.floor(sr * dur), b = actx.createBuffer(1, n, sr), d = b.getChannelData(0);
+    fn(d, sr);
+    let pk = 0; for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(d[i]));
+    if (pk > 0) for (let i = 0; i < n; i++) d[i] *= .9 / pk;
+    return b;
   }
-  function noise(dur, vol, type, freq, q = 1, delay = 0) {
-    const t = actx.currentTime + delay, s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
-    s.buffer = noiseBuf; f.type = type; f.frequency.value = freq; f.Q.value = q;
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-    s.connect(f); f.connect(g); g.connect(actx.destination); s.start(t, Math.random() * .3); s.stop(t + dur + .02);
+  function modes(d, sr, list, start = 0, amp = 1) {
+    const s0 = Math.floor(start * sr);
+    for (const [f, a, tau] of list) {
+      const ph = Math.random() * 6.2832;
+      for (let i = s0; i < d.length; i++) {
+        const t = (i - s0) / sr, e = Math.exp(-t / tau); if (e < 1e-4) break;
+        d[i] += amp * a * e * Math.sin(6.2832 * f * t + ph);
+      }
+    }
   }
+  function burst(d, sr, tau, cut, start = 0, amp = 1) { // tiếng ồn lọc trầm (đục)
+    const s0 = Math.floor(start * sr), k = 1 - Math.exp(-6.2832 * cut / sr); let y = 0, y2 = 0;
+    for (let i = s0; i < d.length; i++) {
+      const t = (i - s0) / sr, e = Math.exp(-t / tau); if (e < 1e-4) break;
+      y += k * ((Math.random() * 2 - 1) - y); y2 += k * (y - y2); d[i] += amp * e * y2 * 3;
+    }
+  }
+  function tick(d, sr, tau, amp = 1, start = 0) { // tiếng tách sắc
+    const s0 = Math.floor(start * sr); let prev = 0;
+    for (let i = s0; i < d.length; i++) {
+      const t = (i - s0) / sr, e = Math.exp(-t / tau); if (e < 1e-4) break;
+      const r = Math.random() * 2 - 1; d[i] += amp * e * (r - prev); prev = r;
+    }
+  }
+  function buildSounds() {
+    bufs = {
+      click: [0, 1, 2].map(v => {
+        const j = 1 + (v - 1) * .06;
+        return mkBuf(.07, (d, sr) => {
+          tick(d, sr, .0008, .6);
+          modes(d, sr, [[3050 * j, 1, .009], [4580 * j, .65, .006], [6250 * j, .45, .0045], [8300 * j, .3, .0035], [2250 * j, .2, .012]]);
+        });
+      }),
+      cue: mkBuf(.06, (d, sr) => {
+        burst(d, sr, .0035, 2200);
+        modes(d, sr, [[330, .5, .012], [1150, .35, .006], [3050, .25, .006], [4580, .15, .004]]);
+      }),
+      cushion: mkBuf(.14, (d, sr) => {
+        burst(d, sr, .022, 380);
+        modes(d, sr, [[105, .6, .03], [210, .2, .02]]);
+      }),
+      pocket: mkBuf(.5, (d, sr) => {
+        burst(d, sr, .035, 260);
+        modes(d, sr, [[82, .7, .06], [150, .3, .04]]);
+        [.11, .19, .26, .34].forEach((s, i) => {
+          const a = .35 / (i + 1);
+          tick(d, sr, .0006, a * .6, s);
+          modes(d, sr, [[2300, 1, .006], [3500, .6, .004]], s, a);
+        });
+      }),
+    };
+  }
+  function play(buf, gain, rate) {
+    const s = actx.createBufferSource(), g = actx.createGain();
+    s.buffer = buf; s.playbackRate.value = rate; g.gain.value = gain;
+    s.connect(g); g.connect(master); s.start();
+  }
+  const vary = () => .94 + Math.random() * .12;
   const sfx = {
-    click(v) { const a = Math.min(1, v / 18); if (a < .03 || !canPlay()) return; tone(3000 + Math.random() * 700, .05, .55 * a, 'sine'); noise(.03, .5 * a, 'highpass', 2600); },
-    cushion(v) { const a = Math.min(1, v / 20); if (a < .06 || !canPlay()) return; tone(150, .1, .55 * a, 'sine', 70); noise(.07, .3 * a, 'lowpass', 650); },
-    pocket() {
-      if (!canPlay()) return;
-      tone(120, .28, .6, 'sine', 55); tone(210, .14, .3, 'triangle', 110);
-      for (let i = 0; i < 4; i++) noise(.05, .22 / (i + 1), 'bandpass', 800 + i * 350, 5, .07 + i * .065);
-    },
-    cue(p) { if (!canPlay()) return; const a = .35 + .65 * p; tone(950, .04, .4 * a, 'triangle', 480); noise(.03, .35 * a, 'bandpass', 1900, 2); },
+    click(v) { const a = Math.min(1, v / 14); if (a < .03 || !canPlay()) return; play(bufs.click[Math.floor(Math.random() * 3)], .9 * Math.pow(a, .8), vary()); },
+    cushion(v) { const a = Math.min(1, v / 18); if (a < .06 || !canPlay()) return; play(bufs.cushion, .8 * a, vary()); },
+    pocket() { if (!canPlay()) return; play(bufs.pocket, .85, vary()); },
+    cue(p) { if (!canPlay()) return; play(bufs.cue, .45 + .5 * p, vary()); },
   };
   const sinking = {}; // hiệu ứng bi đang rơi xuống lỗ
 
