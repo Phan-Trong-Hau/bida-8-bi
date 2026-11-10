@@ -36,6 +36,11 @@
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     display: flex; justify-content: center; align-items: center; gap: 6px;
   }
+  /* điện thoại cầm dọc: xoay cả màn chơi 90° để luôn dùng giao diện ngang */
+  .app.rot {
+    position: fixed; top: 0; left: 0; transform-origin: top left; transform: rotate(90deg) translateY(-100%);
+    padding-left: max(16px, env(safe-area-inset-top, 0px)); padding-right: max(16px, env(safe-area-inset-bottom, 0px));
+  }
   .col { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 46px; flex: none; }
 
   .app.vert {
@@ -318,7 +323,13 @@
   const savePrefs = () => { try { localStorage.setItem('bida.prefs', JSON.stringify(prefs)); } catch (e) {} };
   let started = false;
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-  let vert = false, cueDrag = false;
+  let vert = false, cueDrag = false, rot = false;
+  // đổi toạ độ màn hình sang toạ độ của màn chơi (khi màn chơi đang xoay 90°)
+  const pt = e => rot ? { x: e.clientY, y: window.innerWidth - e.clientX } : { x: e.clientX, y: e.clientY };
+  const rectOf = el => {
+    const r = el.getBoundingClientRect();
+    return rot ? { left: r.top, top: window.innerWidth - r.right, width: r.height, height: r.width } : r;
+  };
 
   // ---------- Trạng thái ----------
   // S: trạng thái chung (đồng bộ giữa 2 máy). balls: bản mô phỏng cục bộ có vận tốc.
@@ -1228,8 +1239,12 @@
 
   // ---------- Kích thước ----------
   function layout() {
-    vert = window.innerWidth < window.innerHeight && window.innerWidth < 900;
+    rot = window.innerWidth < window.innerHeight && window.innerWidth < 900;
+    vert = false;
     const app = $('app');
+    app.classList.toggle('rot', rot);
+    app.style.width = rot ? window.innerHeight + 'px' : '';
+    app.style.height = rot ? window.innerWidth + 'px' : '';
     app.classList.toggle('vert', false); // cột hai bên ở cả hai chiều màn hình
     const cs = getComputedStyle(app);
     const iw = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -1247,8 +1262,8 @@
   const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const ballPlane = new THREE.Plane(new V3(0, 1, 0), -R), hitP = new V3();
   function toPlay(e) {
-    const r = canvas.getBoundingClientRect();
-    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    const r = rectOf(canvas), q = pt(e);
+    ndc.set((q.x - r.left) / r.width * 2 - 1, -((q.y - r.top) / r.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     if (!raycaster.ray.intersectPlane(ballPlane, hitP)) return null;
     return { x: hitP.x + W / 2, y: hitP.z + H / 2 };
@@ -1290,12 +1305,11 @@
   pull.addEventListener('pointerdown', e => {
     if (!isAiming()) return;
     pull.setPointerCapture(e.pointerId);
-    pullStart = e.clientY; setPower(0); e.preventDefault();
+    pullStart = pt(e).y; setPower(0); e.preventDefault();
   });
   pull.addEventListener('pointermove', e => {
     if (pullStart == null) return;
-    const r = pull.getBoundingClientRect();
-    setPower((e.clientY - pullStart) / (r.height * 0.8));
+    setPower((pt(e).y - pullStart) / (rectOf(pull).height * 0.8));
   });
   pull.addEventListener('pointerup', () => { if (pullStart == null) return; pullStart = null; shoot(); });
   pull.addEventListener('pointercancel', () => { pullStart = null; setPower(0); });
@@ -1305,11 +1319,11 @@
   let wheelPos = null, wheelOff = 0;
   wheel.addEventListener('pointerdown', e => {
     if (!isAiming()) return;
-    wheel.setPointerCapture(e.pointerId); wheelPos = e.clientY; e.preventDefault();
+    wheel.setPointerCapture(e.pointerId); wheelPos = pt(e).y; e.preventDefault();
   });
   wheel.addEventListener('pointermove', e => {
     if (wheelPos == null) return;
-    const p = e.clientY, d = p - wheelPos; wheelPos = p;
+    const p = pt(e).y, d = p - wheelPos; wheelPos = p;
     aim += d * 0.0025; wheelOff += d;
     wheel.style.backgroundPosition = `0 ${wheelOff}px`;
   });
@@ -1332,8 +1346,8 @@
   const spinBig = $('spinBig');
   $('spinBtn').addEventListener('click', () => { if (isAiming()) $('spinPick').hidden = false; });
   const pickSpin = e => {
-    const r = spinBig.getBoundingClientRect();
-    setSpin((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height * 2 - 1));
+    const r = rectOf(spinBig), q = pt(e);
+    setSpin((q.x - r.left) / r.width * 2 - 1, -((q.y - r.top) / r.height * 2 - 1));
   };
   spinBig.addEventListener('pointerdown', e => { spinBig.setPointerCapture(e.pointerId); pickSpin(e); e.preventDefault(); });
   spinBig.addEventListener('pointermove', e => { if (e.buttons) pickSpin(e); });
