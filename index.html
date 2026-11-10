@@ -341,17 +341,21 @@
       .then(() => { bufs = out; })
       .catch(e => console.warn('sfx', e));
   }
-  function play(buf, gain, rate) {
-    const s = actx.createBufferSource(), g = actx.createGain();
-    s.buffer = buf; s.playbackRate.value = rate; g.gain.value = gain;
-    s.connect(g); g.connect(master); s.start();
+  function play(buf, gain, rate, dur) {
+    const s = actx.createBufferSource(), g = actx.createGain(), t = actx.currentTime;
+    s.buffer = buf; s.playbackRate.value = rate; g.gain.setValueAtTime(gain, t);
+    s.connect(g); g.connect(master);
+    if (dur) { // chỉ phát đoạn đầu, giảm dần ở cuối
+      g.gain.setValueAtTime(gain, t + dur * .55); g.gain.linearRampToValueAtTime(0, t + dur);
+      s.start(t, 0, dur + .01);
+    } else s.start(t);
   }
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const vary = () => .97 + Math.random() * .06;
   const sfx = {
     click(v) { const a = Math.min(1, v / 14); if (a < .03 || !canPlay()) return; play(pick(bufs.ball), .9 * Math.pow(a, .7), vary()); },
     cushion(v) { const a = Math.min(1, v / 18); if (a < .06 || !canPlay()) return; play(pick(bufs.wall), .25 * a, vary()); },
-    pocket() { if (!canPlay()) return; play(bufs.drop[0], .7, vary()); },
+    pocket() { if (!canPlay()) return; play(bufs.drop[0], .35, vary(), .14); },
     cue(p) { if (!canPlay()) return; play(pick(bufs.cue), .35 + .6 * p, vary()); },
   };
   const sinking = {}; // hiệu ứng bi đang rơi xuống lỗ
