@@ -216,11 +216,14 @@
   }
   .toast {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    display: flex; align-items: center; gap: 10px; white-space: nowrap; pointer-events: none;
+    display: grid; justify-items: center; gap: 3px; text-align: center; pointer-events: none;
+    width: max-content; max-width: min(90%, 560px);
     padding: 10px 20px; border-radius: 14px; background: rgba(18,22,25,.9); border: 1px solid var(--brass);
     font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: .02em;
   }
   .toast.foul { border-color: var(--foul); color: #f6c9be; }
+  .toast b { font-weight: 700; line-height: 1.15; }
+  .toast small { font-family: var(--body); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--muted); line-height: 1.35; }
   .toast.show { animation: toast 1.8s ease forwards; }
   @keyframes toast {
     0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
@@ -292,6 +295,7 @@
       <div class="card">
         <div class="avatar" id="winAv"></div>
         <h2 id="winTitle"></h2>
+        <p class="note" id="winReason"></p>
         <button class="primary" id="againBtn">Ván mới</button>
       </div>
     </div>
@@ -645,10 +649,11 @@
 
   function computeEnd() {
     const P = S.cur, s = shotRec, g = S.groups['p' + P];
-    let foul = false;
-    if (s.scratch || s.firstHit == null) foul = true;
-    else if (g) foul = groupOf(s.firstHit) !== (s.cleared ? 'eight' : g);
-    else if (s.firstHit === 8 && !S.isBreak) foul = true;
+    let foul = null; // mã lỗi để thông báo rõ lý do
+    if (s.scratch) foul = 'scratch';
+    else if (s.firstHit == null) foul = 'miss';
+    else if (g) { const tgt = s.cleared ? 'eight' : g; if (groupOf(s.firstHit) !== tgt) foul = tgt === 'eight' ? 'need8' : 'wrong'; }
+    else if (s.firstHit === 8 && !S.isBreak) foul = 'early8';
 
     const base = { isBreak: false, shot: null, seq: S.seq + 1, streak: { who: -1, n: 0 } };
     const wasBreak = S.isBreak;
@@ -666,12 +671,15 @@
     if (!g && !foul && !S.isBreak && s.potted.length) {
       const t = groupOf(s.potted[0]);
       groups['p' + P] = t; groups['p' + (1 - P)] = t === 'solid' ? 'stripe' : 'solid';
+      var assigned = t;
     }
     const mine = groups['p' + P];
     const ownCount = s.potted.filter(n => n !== 8 && (!mine || groupOf(n) === mine)).length;
     const own = ownCount > 0;
     // hiệu ứng vui: ăn nhiều bi, chuỗi lượt, phá bi đẹp, suýt vào
     const fx = { by: P };
+    if (foul) fx.foul = foul;
+    if (typeof assigned !== 'undefined' && assigned) fx.assign = assigned;
     if (!foul && ownCount >= 2) fx.combo = ownCount;
     if (!foul && wasBreak && s.potted.length) fx.breakpot = s.potted.length;
     if (!s.potted.length && [...s.near].some(n => !s.potted.includes(n))) fx.near = true;
@@ -1296,24 +1304,36 @@
     else if (fx.near) { flair('Suýt vào!', true); shake(); }
     if (ev.kind === 'foul') shake();
   }
+  const FOUL_TEXT = {
+    scratch: 'bi trắng rơi xuống lỗ', miss: 'bi trắng không chạm bi nào', wrong: 'chạm bi của đối thủ trước',
+    need8: 'phải chạm bi 8 trước', early8: 'chạm bi 8 khi chưa có nhóm bi',
+  };
+  const GROUP_TEXT = { solid: 'bi trơn (1–7)', stripe: 'bi sọc (9–15)' };
   function popup(ev) {
     celebrate(ev);
-    const t = $('toast');
+    const t = $('toast'), fx = ev.fx || {};
     const n = ev.who != null ? whoName(ev.who) : '';
-    let text, foul = false;
+    const by = fx.by != null ? whoName(fx.by) : '';
+    let main, sub = '', foul = false;
     switch (ev.kind) {
-      case 'start': text = cap(n) + ' phá bi'; break;
-      case 'turn': text = 'Lượt của ' + n; break;
-      case 'again': text = cap(n) + ' đánh tiếp'; break;
-      case 'foul': text = 'Lỗi · ' + cap(n) + ' đặt bi cái'; foul = true; break;
-      case 'bad': text = 'Không đặt được'; foul = true; break;
-      case 'joined': text = cap(n) + ' đã vào bàn'; break;
-      case 'back': text = 'Đã kết nối lại'; break;
-      case 'left': text = 'Mất kết nối'; foul = true; break;
-      case 'noroom': text = 'Đang tìm phòng…'; break;
+      case 'start': main = cap(n) + ' phá bi mở màn'; break;
+      case 'turn': main = 'Tới lượt ' + n; if (by && fx.by !== ev.who) sub = cap(by) + ' không ăn được bi'; break;
+      case 'again': main = cap(n) + ' ăn bi, được đánh tiếp'; break;
+      case 'foul':
+        main = by ? cap(by) + ' đánh lỗi' + (FOUL_TEXT[fx.foul] ? ': ' + FOUL_TEXT[fx.foul] : '') : 'Có lỗi';
+        sub = cap(n) + ' được đặt bi trắng ở bất kỳ đâu'; foul = true; break;
+      case 'bad': main = 'Chỗ này không đặt được bi trắng'; sub = 'Chọn chỗ trống trên mặt bàn'; foul = true; break;
+      case 'joined': main = cap(n) + ' đã vào bàn'; break;
+      case 'back': main = 'Đã kết nối lại'; break;
+      case 'left': main = 'Mất kết nối'; sub = 'Đang thử kết nối lại…'; foul = true; break;
+      case 'noroom': main = 'Đang tìm phòng…'; break;
       default: return;
     }
-    t.textContent = text;
+    if (fx.assign && by) sub = (sub ? sub + ' · ' : '') + cap(by) + ' nhận ' + GROUP_TEXT[fx.assign];
+    t.textContent = '';
+    const b = document.createElement('b'); b.textContent = main; t.appendChild(b);
+    if (sub) { const sm = document.createElement('small'); sm.textContent = sub; t.appendChild(sm); }
+    t.style.animationDuration = sub ? '3s' : '';
     t.className = 'toast' + (foul ? ' foul' : '');
     t.hidden = false;
     void t.offsetWidth;
@@ -1363,6 +1383,10 @@
     if (S.phase === 'over') {
       paintAvatar($('winAv'), S.winner);
       $('winTitle').textContent = cap(whoName(S.winner)) + ' thắng';
+      const loser = cap(whoName(1 - S.winner));
+      $('winReason').textContent = S.reason === 'clean' ? cap(whoName(S.winner)) + ' đưa bi 8 vào lỗ đúng luật'
+        : S.reason === 'early' ? loser + ' đưa bi 8 vào lỗ quá sớm'
+        : S.reason === 'foul8' ? loser + ' đánh lỗi khi bi 8 rơi xuống lỗ' : '';
       const btn = $('againBtn');
       btn.textContent = myVote ? 'Đang chờ…' : otherVote ? 'Đồng ý ván mới' : 'Ván mới';
       btn.hidden = online && me < 0;
