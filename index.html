@@ -185,6 +185,35 @@
   .spin-big::after { top: 50%; left: 8%; right: 8%; height: 1px; }
   .spin-big .spin-dot { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
 
+  .fxc { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+  .flair { z-index: 6; }
+  .flair {
+    position: absolute; left: 50%; top: 24%; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap;
+    font-family: var(--display); font-weight: 700; font-size: clamp(28px, 6vw, 46px); letter-spacing: .03em; text-transform: uppercase;
+    color: #ffe39a; text-shadow: 0 2px 0 #7a5410, 0 0 18px rgba(255,200,90,.85);
+  }
+  .flair.cold { color: #d4ecfa; text-shadow: 0 2px 0 #23506b, 0 0 16px rgba(132,198,232,.85); }
+  .flair.show { animation: flair 1.7s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes flair {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.4) rotate(-6deg); }
+    18% { opacity: 1; transform: translate(-50%, -50%) scale(1.12) rotate(2deg); }
+    30% { transform: translate(-50%, -50%) scale(1) rotate(0); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -75%) scale(1); }
+  }
+  .table-wrap.shake { animation: shake .45s; }
+  @keyframes shake {
+    0%, 100% { transform: none; }
+    20% { transform: translateX(-6px) rotate(-.4deg); }
+    40% { transform: translateX(5px) rotate(.3deg); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+  }
+  #over:not([hidden]) #winAv { animation: winBounce 1s ease-in-out infinite; }
+  @keyframes winBounce {
+    0%, 100% { transform: translateY(0); box-shadow: 0 0 0 3px rgba(216,169,79,.5); }
+    50% { transform: translateY(-8px); box-shadow: 0 0 0 6px rgba(216,169,79,.8), 0 0 22px rgba(255,210,120,.7); }
+  }
   .toast {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     display: flex; align-items: center; gap: 10px; white-space: nowrap; pointer-events: none;
@@ -216,6 +245,8 @@
     .avatar { transition: none; }
     .who.active .avatar { animation: none; box-shadow: 0 0 0 4px rgba(216,169,79,.6); }
     .reset.waiting { animation: none; }
+    .table-wrap.shake, #over:not([hidden]) #winAv { animation: none; }
+    .flair.show { animation-name: toastFade; }
     .toast.show { animation-name: toastFade; }
     @keyframes toastFade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
   }
@@ -234,6 +265,8 @@
 
   <div class="table-wrap" id="tableWrap">
     <canvas id="table" aria-label="Bàn bida"></canvas>
+    <canvas class="fxc" id="fxc" aria-hidden="true"></canvas>
+    <div class="flair" id="flair" hidden></div>
     <div class="toast" id="toast" hidden></div>
     <div class="modal" id="invite" hidden>
       <div class="card">
@@ -400,6 +433,7 @@
       seats: { ...base.seats, ...(d.seats || {}) }, reset: { ...base.reset, ...(d.reset || {}) },
       groups: { ...base.groups, ...(d.groups || {}) }, wins: { ...base.wins, ...(d.wins || {}) },
       players: { ...base.players, ...(d.players || {}) }, felt: FELTS[d.felt] ? d.felt : 'navy',
+      streak: d.streak && typeof d.streak === 'object' ? d.streak : { who: -1, n: 0 },
       event: d.event || { id: '', kind: 'start', who: 0 },
     };
   }
@@ -514,6 +548,7 @@
   function pot(b) {
     const p = POCKETS.reduce((m, q) => Math.hypot(b.x - q.x, b.y - q.y) < Math.hypot(b.x - m.x, b.y - m.y) ? q : m);
     sinking[b.n] = { x: b.x, y: b.y, px: p.x, py: p.y, t0: performance.now() };
+    pocketFlash(p.x, p.y);
     sfx.pocket();
     b.on = false; b.vx = b.vy = 0;
     if (b.n === 0) shotRec.scratch = true; else shotRec.potted.push(b.n);
@@ -558,6 +593,7 @@
       if (b.x < R && !inMouthY(b.y)) { b.x = R; sfx.cushion(Math.abs(b.vx)); railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
       if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; sfx.cushion(Math.abs(b.vx)); railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
       if (inPocket(b)) { pot(b); continue; }
+      if (b.n && (b.vx || b.vy) && POCKETS.some(q => Math.hypot(b.x - q.x, b.y - q.y) < q.r + R * 1.3)) shotRec.near.add(b.n);
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > 0) {
         const ns = sp - (0.045 + sp * 0.008) * dt;
@@ -584,7 +620,7 @@
     const c = balls[0];
     c.vx = Math.cos(shot.aim) * shot.power * MAXV; c.vy = Math.sin(shot.aim) * shot.power * MAXV;
     const g = S.groups['p' + S.cur];
-    shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false,
+    shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false, near: new Set(),
       spin: shot.spin || { x: 0, y: 0 }, dir: { x: Math.cos(shot.aim), y: Math.sin(shot.aim) }, rails: 0 };
     sim = { id: shot.id, mine };
     sfx.cue(shot.power);
@@ -614,7 +650,8 @@
     else if (g) foul = groupOf(s.firstHit) !== (s.cleared ? 'eight' : g);
     else if (s.firstHit === 8 && !S.isBreak) foul = true;
 
-    const base = { isBreak: false, shot: null, seq: S.seq + 1 };
+    const base = { isBreak: false, shot: null, seq: S.seq + 1, streak: { who: -1, n: 0 } };
+    const wasBreak = S.isBreak;
     if (s.potted.includes(8)) {
       if (S.isBreak) { respot8(); s.potted = s.potted.filter(n => n !== 8); }
       else {
@@ -631,13 +668,23 @@
       groups['p' + P] = t; groups['p' + (1 - P)] = t === 'solid' ? 'stripe' : 'solid';
     }
     const mine = groups['p' + P];
-    const own = mine ? s.potted.some(n => groupOf(n) === mine) : s.potted.length > 0;
+    const ownCount = s.potted.filter(n => n !== 8 && (!mine || groupOf(n) === mine)).length;
+    const own = ownCount > 0;
+    // hiệu ứng vui: ăn nhiều bi, chuỗi lượt, phá bi đẹp, suýt vào
+    const fx = { by: P };
+    if (!foul && ownCount >= 2) fx.combo = ownCount;
+    if (!foul && wasBreak && s.potted.length) fx.breakpot = s.potted.length;
+    if (!s.potted.length && [...s.near].some(n => !s.potted.includes(n))) fx.near = true;
     if (foul) {
       balls[0].on = false;
-      return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'place', event: { id: rid(), kind: 'foul', who: 1 - P } };
+      return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'place', event: { id: rid(), kind: 'foul', who: 1 - P, fx } };
     }
-    if (own) return { ...base, balls: serialBalls(), groups, cur: P, phase: 'aim', event: { id: rid(), kind: 'again', who: P } };
-    return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'aim', event: { id: rid(), kind: 'turn', who: 1 - P } };
+    if (own) {
+      const n = (S.streak && S.streak.who === P ? S.streak.n : 0) + 1;
+      if (n >= 3) fx.streak = n;
+      return { ...base, streak: { who: P, n }, balls: serialBalls(), groups, cur: P, phase: 'aim', event: { id: rid(), kind: 'again', who: P, fx } };
+    }
+    return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'aim', event: { id: rid(), kind: 'turn', who: 1 - P, fx } };
   }
 
   function onSimEnd() {
@@ -1098,7 +1145,19 @@
     stickInner.position.x = -(R + 4 + power * 90);
   }
 
+  // vòng sáng ở miệng lỗ khi bi rơi
+  const flashGeo = new THREE.RingGeometry(1, 1.35, 40), pocketFx = [];
+  function pocketFlash(px, py) {
+    const m = new THREE.Mesh(flashGeo, new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: .9, depthTest: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.copy(T(px, py, RAIL_H + 6)); m.renderOrder = 7;
+    scene.add(m); pocketFx.push({ m, t0: performance.now() });
+  }
   function render3D(now) {
+    for (let i = pocketFx.length - 1; i >= 0; i--) {
+      const f = pocketFx[i], a = (now - f.t0) / 550;
+      if (a >= 1) { scene.remove(f.m); f.m.material.dispose(); pocketFx.splice(i, 1); continue; }
+      f.m.scale.setScalar(14 + 30 * a); f.m.material.opacity = .9 * (1 - a);
+    }
     syncBalls();
     const aiming = isAiming() && balls[0].on && !cueDrag;
     stick.visible = aimLine.visible = ghostRing.visible = aiming;
@@ -1189,7 +1248,56 @@
     } else el.textContent = label;
   }
 
+  // ---------- Hiệu ứng vui ----------
+  const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fxc = $('fxc'), fxx = fxc.getContext('2d');
+  let parts = [], fxRun = false;
+  const CONFETTI = ['#f0bf2a', '#1f4fb8', '#d23a2a', '#5b2a86', '#ee7a20', '#1d8a4b', '#ffe39a', '#f4f1e8', '#84c6e8'];
+  function confetti(count, fromY = .35) {
+    if (reduceMotion) return;
+    const r = fxc.getBoundingClientRect(), k = Math.min(window.devicePixelRatio || 1, 2);
+    const w = fxc.clientWidth, h = fxc.clientHeight;
+    if (fxc.width !== Math.round(w * k)) { fxc.width = Math.round(w * k); fxc.height = Math.round(h * k); }
+    for (let i = 0; i < count; i++) parts.push({
+      x: w * (.15 + Math.random() * .7), y: h * fromY, vx: (Math.random() - .5) * 9, vy: -3 - Math.random() * 9,
+      a: Math.random() * 6, va: (Math.random() - .5) * .4, c: CONFETTI[i % CONFETTI.length], s: 5 + Math.random() * 6,
+    });
+    if (!fxRun) { fxRun = true; requestAnimationFrame(fxLoop); }
+  }
+  function fxLoop() {
+    const k = fxc.width / (fxc.clientWidth || 1), h = fxc.clientHeight;
+    fxx.setTransform(k, 0, 0, k, 0, 0); fxx.clearRect(0, 0, fxc.clientWidth, h);
+    parts = parts.filter(p => p.y < h + 30);
+    for (const p of parts) {
+      p.vy += .22; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.a += p.va;
+      fxx.save(); fxx.translate(p.x, p.y); fxx.rotate(p.a); fxx.fillStyle = p.c;
+      fxx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2 * (.4 + .6 * Math.abs(Math.cos(p.a * 2)))); fxx.restore();
+    }
+    if (parts.length) requestAnimationFrame(fxLoop); else { fxRun = false; fxx.clearRect(0, 0, fxc.clientWidth, h); }
+  }
+  function shake() {
+    if (reduceMotion) return;
+    const w = $('tableWrap'); w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
+  }
+  function flair(text, cold) {
+    const f = $('flair');
+    f.textContent = text; f.className = 'flair' + (cold ? ' cold' : ''); f.hidden = false;
+    void f.offsetWidth; f.classList.add('show');
+  }
+  $('flair').addEventListener('animationend', () => { $('flair').hidden = true; });
+  function celebrate(ev) {
+    if (ev.kind === 'win') { confetti(160); setTimeout(() => confetti(110, .2), 500); setTimeout(() => confetti(90, .3), 1100); return; }
+    const fx = ev.fx; if (!fx) { if (ev.kind === 'foul') shake(); return; }
+    const by = cap(whoName(fx.by));
+    if (fx.combo >= 3) { flair('Quá đỉnh! Ăn ' + fx.combo + ' bi'); confetti(110); }
+    else if (fx.combo === 2) { flair('Ăn 2 bi một lượt!'); confetti(70); }
+    else if (fx.streak) { flair('Chuỗi ' + fx.streak + ' lượt!'); confetti(50); }
+    else if (fx.breakpot) { flair('Phá bi đẹp!'); confetti(40); }
+    else if (fx.near) { flair('Suýt vào!', true); shake(); }
+    if (ev.kind === 'foul') shake();
+  }
   function popup(ev) {
+    celebrate(ev);
     const t = $('toast');
     const n = ev.who != null ? whoName(ev.who) : '';
     let text, foul = false;
