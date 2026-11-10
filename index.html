@@ -177,6 +177,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (() => {
   const W = 1000, H = 500, RAIL = 46, R = 11;
@@ -191,11 +192,11 @@
   const HEAD = { x: W * 0.25, y: H / 2 }, FOOT = { x: W * 0.73, y: H / 2 };
 
   const $ = id => document.getElementById(id);
-  const canvas = $('table'), ctx = canvas.getContext('2d');
+  const canvas = $('table');
   const pull = $('pull'), wheel = $('wheel');
   const rid = () => Math.random().toString(36).slice(2, 10);
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-  let dpr = 1, vert = false, LW = CW, LH = CH;
+  let vert = false, cueDrag = false;
 
   // ---------- Trạng thái ----------
   // S: trạng thái chung (đồng bộ giữa 2 máy). balls: bản mô phỏng cục bộ có vận tốc.
@@ -252,8 +253,8 @@
     const owner = S.seats['p' + S.cur];
     return !owner || owner === myId;
   }
-  const isAiming = () => S.phase === 'aim' && !sim && canAct();
-  const isPlacing = () => S.phase === 'place' && !sim && canAct();
+  const isAiming = () => (S.phase === 'aim' || (S.phase === 'place' && balls[0] && balls[0].on)) && !sim && canAct();
+  const canPlace = () => S.phase === 'place' && !sim && canAct();
 
   function merge(s, p) {
     const o = { ...s };
@@ -411,11 +412,11 @@
   }
 
   function place(p) {
-    if (!isPlacing()) return;
+    if (!canPlace()) return;
     const c = balls[0];
     if (!free(p.x, p.y, c)) { popup({ kind: 'bad' }); return; }
     c.x = p.x; c.y = p.y; c.vx = c.vy = 0; c.on = true;
-    commit({ balls: serialBalls(), phase: 'aim', seq: S.seq + 1 });
+    commit({ balls: serialBalls(), seq: S.seq + 1 });
   }
 
   // ---------- Xếp lại bàn: cần cả hai đồng ý ----------
@@ -526,70 +527,146 @@
     }, e => console.warn('db', e));
   }
 
-  // ---------- Vẽ ----------
-  const scr = (sx, sy) => vert ? { x: -sy, y: sx } : { x: sx, y: sy };
+  // ---------- Vẽ 3D (Three.js) ----------
+  // Toạ độ vật lý (x, y) trên mặt bàn → thế giới 3D (x - W/2, cao, y - H/2)
+  const V3 = THREE.Vector3;
+  const T = (x, z, y = 0) => new V3(x - W / 2, y, z - H / 2);
+  const CU = 14, RW = 44, CUSH_H = 17, RAIL_H = 20;
 
-  function roundRect(x, y, w, h, r) {
-    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
-  }
-  function diamond(x, y) {
-    ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + 4, y); ctx.lineTo(x, y + 4); ctx.lineTo(x - 4, y); ctx.closePath(); ctx.fill();
-  }
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setClearColor(0x121619, 1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(36, 1, 10, 9000);
 
-  function drawTable() {
-    const wood = ctx.createLinearGradient(0, 0, 0, CH);
-    wood.addColorStop(0, '#5a3620'); wood.addColorStop(.5, '#4e2e1a'); wood.addColorStop(1, '#5a3620');
-    roundRect(0, 0, CW, CH, 18); ctx.fillStyle = wood; ctx.fill();
-    ctx.fillStyle = '#16597a'; ctx.fillRect(RAIL - 12, RAIL - 12, W + 24, H + 24);
-    const felt = ctx.createRadialGradient(CW / 2, CH / 2, 40, CW / 2, CH / 2, CW * .6);
-    felt.addColorStop(0, '#2582ad'); felt.addColorStop(1, '#1a6489');
-    ctx.fillStyle = felt; ctx.fillRect(RAIL, RAIL, W, H);
-    ctx.fillStyle = '#e9d9a8';
-    for (let i = 1; i < 8; i++) {
-      if (i === 4) continue;
-      const x = RAIL + (W / 8) * i;
-      diamond(x, RAIL / 2 - 4); diamond(x, CH - RAIL / 2 + 4);
+  scene.add(new THREE.HemisphereLight(0xe4edf5, 0x2a1a10, 0.5));
+  const sun = new THREE.DirectionalLight(0xfff2dc, 0.9);
+  sun.position.set(-160, 900, 260);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  Object.assign(sun.shadow.camera, { left: -640, right: 640, top: 400, bottom: -400, near: 100, far: 1600 });
+  sun.shadow.bias = -0.0006;
+  scene.add(sun);
+  const lamp = new THREE.PointLight(0xffffff, 0.45, 2200);
+  lamp.position.set(0, 520, 0);
+  scene.add(lamp);
+
+  const stdMat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, ...o });
+  const feltM = stdMat(0x17668f, { roughness: .95 }), cushionM = stdMat(0x11506f, { roughness: .9 });
+  const woodM = stdMat(0x6a3f22, { roughness: .45 }), woodDarkM = stdMat(0x3a2112, { roughness: .6 });
+  const ivoryM = stdMat(0xe9d9a8, { roughness: .4 }), blackM = new THREE.MeshBasicMaterial({ color: 0x040404 });
+
+  function box(x0, x1, z0, z1, y0, y1, m, shadow = true) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), m);
+    mesh.position.copy(T((x0 + x1) / 2, (z0 + z1) / 2, (y0 + y1) / 2));
+    mesh.castShadow = shadow; mesh.receiveShadow = true;
+    scene.add(mesh); return mesh;
+  }
+  // mặt nỉ, băng, thành gỗ, thân bàn
+  box(-CU, W + CU, -CU, H + CU, -4, 0, feltM, false);
+  for (const [z0, z1] of [[-CU, 0], [H, H + CU]]) {
+    box(26, W / 2 - 22, z0, z1, 0, CUSH_H, cushionM);
+    box(W / 2 + 22, W - 26, z0, z1, 0, CUSH_H, cushionM);
+  }
+  box(-CU, 0, 26, H - 26, 0, CUSH_H, cushionM);
+  box(W, W + CU, 26, H - 26, 0, CUSH_H, cushionM);
+  const E = CU + RW;
+  box(-E, W + E, -E, -CU, 0, RAIL_H, woodM);
+  box(-E, W + E, H + CU, H + E, 0, RAIL_H, woodM);
+  box(-E, -CU, -CU, H + CU, 0, RAIL_H, woodM);
+  box(W + CU, W + E, -CU, H + CU, 0, RAIL_H, woodM);
+  box(-E - 6, W + E + 6, -E - 6, H + E + 6, -110, -4, woodDarkM, false);
+  // lỗ
+  for (const p of POCKETS) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r + 2, p.r + 2, RAIL_H + 1, 28), blackM);
+    m.position.copy(T(p.x, p.y, (RAIL_H + 1) / 2 - 0.5)); scene.add(m);
+  }
+  // diamond trên thành bàn, điểm chân bàn
+  const dotGeo = new THREE.CircleGeometry(3.2, 12);
+  const addDot = (x, z, y = RAIL_H + .3, m = ivoryM) => {
+    const d = new THREE.Mesh(dotGeo, m); d.rotation.x = -Math.PI / 2; d.position.copy(T(x, z, y)); scene.add(d);
+  };
+  for (let i = 1; i < 8; i++) if (i !== 4) { addDot(W / 8 * i, -CU - RW / 2); addDot(W / 8 * i, H + CU + RW / 2); }
+  for (let i = 1; i < 4; i++) { addDot(-CU - RW / 2, H / 4 * i); addDot(W + CU + RW / 2, H / 4 * i); }
+  addDot(FOOT.x, FOOT.y, .2, new THREE.MeshBasicMaterial({ color: 0x8fc3dc }));
+
+  // bi
+  function ballTexture(n) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const g = c.getContext('2d'), ivory = '#f4f1e8';
+    g.fillStyle = n === 0 || n > 8 ? ivory : colorOf(n); g.fillRect(0, 0, 256, 128);
+    if (n > 8) { g.fillStyle = colorOf(n); g.fillRect(0, 34, 256, 60); }
+    for (const x of [64, 192]) {
+      if (n === 0) { g.fillStyle = '#c0392b'; g.beginPath(); g.arc(x, 64, 5, 0, 7); g.fill(); continue; }
+      g.fillStyle = ivory; g.beginPath(); g.arc(x, 64, 19, 0, 7); g.fill();
+      g.fillStyle = '#111'; g.font = '700 24px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(n, x, 65);
     }
-    for (let i = 1; i < 4; i++) { const y = RAIL + (H / 4) * i; diamond(RAIL / 2 - 4, y); diamond(CW - RAIL / 2 + 4, y); }
-    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(RAIL + HEAD.x, RAIL); ctx.lineTo(RAIL + HEAD.x, RAIL + H); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.25)';
-    ctx.beginPath(); ctx.arc(RAIL + FOOT.x, RAIL + FOOT.y, 2.5, 0, Math.PI * 2); ctx.fill();
-    for (const p of POCKETS) {
-      ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.arc(RAIL + p.x, RAIL + p.y, p.r + 6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#050505'; ctx.beginPath(); ctx.arc(RAIL + p.x, RAIL + p.y, p.r + 1, 0, Math.PI * 2); ctx.fill();
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+  }
+  const ballGeo = new THREE.SphereGeometry(R, 32, 20);
+  const ballMeshes = {};
+  const faceUp = new THREE.Quaternion().setFromUnitVectors(new V3(0, 0, 1), new V3(0, 1, 0));
+  for (let n = 0; n <= 15; n++) {
+    const m = new THREE.Mesh(ballGeo, new THREE.MeshPhongMaterial({ map: ballTexture(n), shininess: 90, specular: 0x555555 }));
+    m.castShadow = true; m.quaternion.copy(faceUp); m.userData.last = null;
+    scene.add(m); ballMeshes[n] = m;
+  }
+  const rollAxis = new V3(), rollQ = new THREE.Quaternion();
+  function syncBalls() {
+    for (const b of balls) {
+      const m = ballMeshes[b.n];
+      m.visible = b.on;
+      if (!b.on) { m.userData.last = null; continue; }
+      const L = m.userData.last;
+      if (L) {
+        const dx = b.x - L.x, dz = b.y - L.y, d = Math.hypot(dx, dz);
+        if (d > 1e-3 && d < R * 3) { rollAxis.set(dz, 0, -dx).normalize(); rollQ.setFromAxisAngle(rollAxis, d / R); m.quaternion.premultiply(rollQ); }
+      }
+      m.userData.last = { x: b.x, y: b.y };
+      m.position.copy(T(b.x, b.y, R));
     }
   }
 
-  function drawBall(b, alpha = 1) {
-    const { x, y, n } = b;
-    const sh = scr(2.5, 3.5), hl = scr(-.35, -.4);
-    ctx.save(); ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(0,0,0,.35)';
-    ctx.beginPath(); ctx.arc(x + sh.x, y + sh.y, R * .95, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.clip();
-    ctx.translate(x, y);
-    if (vert) ctx.rotate(Math.PI / 2);
-    if (n === 0 || n > 8) { ctx.fillStyle = '#f4f1e8'; ctx.fillRect(-R, -R, 2 * R, 2 * R); }
-    if (n > 0) {
-      ctx.fillStyle = colorOf(n);
-      n > 8 ? ctx.fillRect(-R, -R * .56, 2 * R, R * 1.12) : ctx.fillRect(-R, -R, 2 * R, 2 * R);
-      ctx.fillStyle = '#f4f1e8'; ctx.beginPath(); ctx.arc(0, 0, R * .5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.font = '700 8.5px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(n, 0, .5);
-    }
-    if (vert) ctx.rotate(-Math.PI / 2);
-    const g1 = ctx.createRadialGradient(hl.x * R, hl.y * R, 0, hl.x * R, hl.y * R, R * .9);
-    g1.addColorStop(0, 'rgba(255,255,255,.65)'); g1.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g1; ctx.fillRect(-R, -R, 2 * R, 2 * R);
-    const g2 = ctx.createRadialGradient(0, 0, R * .55, 0, 0, R);
-    g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,.35)');
-    ctx.fillStyle = g2; ctx.fillRect(-R, -R, 2 * R, 2 * R);
-    ctx.restore();
+  // gậy
+  const stick = new THREE.Group(), stickInner = new THREE.Group();
+  stick.add(stickInner); scene.add(stick);
+  function stickPart(from, to, r1, r2, color) {
+    const len = to - from;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 18), stdMat(color, { roughness: .35 }));
+    m.rotation.z = -Math.PI / 2; m.position.x = -(from + len / 2); m.castShadow = true; stickInner.add(m);
   }
+  stickPart(0, 4, 2.5, 2.6, 0x3f8fc0);
+  stickPart(4, 14, 2.6, 2.7, 0xf4f1e8);
+  stickPart(14, 270, 2.7, 3.6, 0xe3c48f);
+  stickPart(270, 292, 3.6, 3.8, 0xd8a94f);
+  stickPart(292, 430, 3.8, 5, 0x2b170c);
+  stickInner.rotation.z = -0.07;
 
-  function drawGuide() {
+  // đường ngắm
+  const lineOf = mat => {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+    const l = new THREE.Line(g, mat); l.frustumCulled = false; scene.add(l); return l;
+  };
+  const aimLine = lineOf(new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 8, gapSize: 7, transparent: true, opacity: .7 }));
+  const objLine = lineOf(new THREE.LineBasicMaterial({ color: 0x9fd7f2 }));
+  const defLine = lineOf(new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .4 }));
+  function setLine(l, a, b) {
+    const p = l.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true;
+    if (l.material.isLineDashedMaterial) l.computeLineDistances();
+  }
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .85, side: THREE.DoubleSide });
+  const ghostRing = new THREE.Mesh(new THREE.RingGeometry(R - 1.6, R, 32), ringMat);
+  ghostRing.rotation.x = -Math.PI / 2; scene.add(ghostRing);
+  const handRing = new THREE.Mesh(new THREE.RingGeometry(R + 3, R + 5.5, 36),
+    new THREE.MeshBasicMaterial({ color: 0x84c6e8, transparent: true, opacity: .8, side: THREE.DoubleSide }));
+  handRing.rotation.x = -Math.PI / 2; scene.add(handRing);
+  const placeGhost = new THREE.Mesh(ballGeo, new THREE.MeshPhongMaterial({ color: 0xf4f1e8, transparent: true, opacity: .55 }));
+  scene.add(placeGhost);
+
+  function updateAim() {
     const c = balls[0], dx = Math.cos(aim), dy = Math.sin(aim);
     let t = Infinity, hit = null;
     for (const b of balls) {
@@ -607,60 +684,57 @@
     if (tw < t) { t = tw; hit = null; }
     const gx = c.x + dx * t, gy = c.y + dy * t;
     const bad = hit && !legalTarget(hit.n);
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]);
-    ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(gx, gy); ctx.stroke(); ctx.setLineDash([]);
-    ctx.strokeStyle = bad ? '#ff8a73' : 'rgba(255,255,255,.75)';
-    ctx.beginPath(); ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.stroke();
+    setLine(aimLine, T(c.x, c.y, 1), T(gx, gy, 1));
+    ghostRing.position.copy(T(gx, gy, .8));
+    ringMat.color.set(bad ? 0xff8a73 : 0xffffff);
+    objLine.visible = defLine.visible = !!hit;
     if (hit) {
       let ox = hit.x - gx, oy = hit.y - gy; const ol = Math.hypot(ox, oy) || 1; ox /= ol; oy /= ol;
       const len = 50 + power * 110;
-      ctx.strokeStyle = bad ? '#ff8a73' : '#9fd7f2'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(hit.x, hit.y); ctx.lineTo(hit.x + ox * len, hit.y + oy * len); ctx.stroke();
+      objLine.material.color.set(bad ? 0xff8a73 : 0x9fd7f2);
+      setLine(objLine, T(hit.x, hit.y, 1), T(hit.x + ox * len, hit.y + oy * len, 1));
       let tx = -oy, ty = ox; if (tx * dx + ty * dy < 0) { tx = -tx; ty = -ty; }
       const k = Math.abs(tx * dx + ty * dy);
-      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + tx * len * k, gy + ty * len * k); ctx.stroke();
+      setLine(defLine, T(gx, gy, 1), T(gx + tx * len * k, gy + ty * len * k, 1));
     }
-    ctx.restore();
+    stick.position.copy(T(c.x, c.y, R));
+    stick.rotation.y = -aim;
+    stickInner.position.x = -(R + 4 + power * 90);
   }
 
-  function drawStick() {
-    const c = balls[0], dx = Math.cos(aim), dy = Math.sin(aim);
-    const back = R + 6 + power * 90;
-    const seg = (from, to, w, col) => {
-      ctx.strokeStyle = col; ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(c.x - dx * from, c.y - dy * from); ctx.lineTo(c.x - dx * to, c.y - dy * to); ctx.stroke();
+  function render3D(now) {
+    syncBalls();
+    const aiming = isAiming() && balls[0].on && !cueDrag;
+    stick.visible = aimLine.visible = ghostRing.visible = aiming;
+    if (!aiming) objLine.visible = defLine.visible = false;
+    if (aiming) updateAim();
+    const placing = canPlace();
+    handRing.visible = placing && balls[0].on && !cueDrag;
+    if (handRing.visible) {
+      handRing.position.copy(T(balls[0].x, balls[0].y, .9));
+      handRing.material.opacity = .45 + .35 * Math.sin(now / 250);
+    }
+    const showGhost = placing && hover && (cueDrag || !balls[0].on);
+    placeGhost.visible = !!showGhost;
+    if (showGhost) {
+      placeGhost.position.copy(T(hover.x, hover.y, R));
+      placeGhost.material.color.set(free(hover.x, hover.y, balls[0]) ? 0xf4f1e8 : 0xff8a73);
+    }
+    renderer.render(scene, camera);
+  }
+
+  function fitCamera(w, h) {
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    const dir = (vert ? new V3(-1, 2.4, 0) : new V3(0, 1.8, 1)).normalize();
+    const corners = [];
+    for (const x of [-E, W + E]) for (const z of [-E, H + E]) for (const y of [0, RAIL_H]) corners.push(T(x, z, y));
+    let lo = 200, hi = 8000;
+    const fits = d => {
+      camera.position.copy(dir).multiplyScalar(d); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+      return corners.every(c => { const p = c.clone().project(camera); return Math.abs(p.x) <= .98 && Math.abs(p.y) <= .98 && p.z < 1; });
     };
-    const sh = scr(4, 6);
-    ctx.save(); ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 8;
-    ctx.beginPath(); ctx.moveTo(c.x - dx * back + sh.x, c.y - dy * back + sh.y);
-    ctx.lineTo(c.x - dx * (back + 420) + sh.x, c.y - dy * (back + 420) + sh.y); ctx.stroke();
-    seg(back + 290, back + 420, 9, '#2b170c');
-    seg(back + 270, back + 292, 8, '#d8a94f');
-    seg(back + 14, back + 272, 6, '#e3c48f');
-    seg(back + 4, back + 14, 5, '#f4f1e8');
-    seg(back, back + 4, 5, '#3f8fc0');
-    ctx.restore();
-  }
-
-  function draw() {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, LW, LH);
-    if (vert) { ctx.translate(0, CW); ctx.rotate(-Math.PI / 2); }
-    drawTable();
-    ctx.translate(RAIL, RAIL);
-    const aiming = isAiming() && balls[0].on;
-    if (aiming) drawGuide();
-    for (const b of balls) if (b.on) drawBall(b);
-    if (aiming) drawStick();
-    if (isPlacing() && hover) {
-      const ok = free(hover.x, hover.y, balls[0]);
-      drawBall({ n: 0, x: hover.x, y: hover.y }, .6);
-      ctx.strokeStyle = ok ? '#9fd7f2' : '#ff8a73'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(hover.x, hover.y, R + 3, 0, Math.PI * 2); ctx.stroke();
-    }
+    for (let i = 0; i < 26; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+    fits(hi);
   }
 
   // ---------- Giao diện ----------
@@ -767,33 +841,35 @@
     vert = window.innerWidth < window.innerHeight && window.innerWidth < 900;
     const app = $('app');
     app.classList.toggle('vert', vert);
-    LW = vert ? CH : CW; LH = vert ? CW : CH;
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(LW * dpr); canvas.height = Math.round(LH * dpr);
     const cs = getComputedStyle(app);
     const iw = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const ih = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    const ratio = LW / LH;
-    const availW = vert ? iw : iw - 2 * 46 - 2 * 6;
-    const availH = vert ? ih - 40 - 52 - 2 * 6 : ih;
-    const w = Math.max(120, Math.min(availW, availH * ratio)), h = w / ratio;
+    const w = Math.max(160, vert ? iw : iw - 2 * 46 - 2 * 6);
+    const h = Math.max(160, vert ? ih - 40 - 52 - 2 * 6 : ih);
     canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    renderer.setSize(w, h, false);
+    fitCamera(w, h);
     for (const c of document.querySelectorAll('.col')) c.style.height = vert ? '' : h + 'px';
     setPower(power);
   }
 
   // ---------- Điều khiển ----------
+  const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  const ballPlane = new THREE.Plane(new V3(0, 1, 0), -R), hitP = new V3();
   function toPlay(e) {
     const r = canvas.getBoundingClientRect();
-    const sx = (e.clientX - r.left) / r.width * LW, sy = (e.clientY - r.top) / r.height * LH;
-    return { x: (vert ? CW - sy : sx) - RAIL, y: (vert ? sx : sy) - RAIL };
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    if (!raycaster.ray.intersectPlane(ballPlane, hitP)) return null;
+    return { x: hitP.x + W / 2, y: hitP.z + H / 2 };
   }
-  function aimAt(p) { const c = balls[0]; if (c.on && Math.hypot(p.x - c.x, p.y - c.y) > 2) aim = Math.atan2(p.y - c.y, p.x - c.x); }
+  function aimAt(p) { const c = balls[0]; if (p && c.on && Math.hypot(p.x - c.x, p.y - c.y) > 2) aim = Math.atan2(p.y - c.y, p.x - c.x); }
 
+  // Được đặt bi cái: kéo bi cái (hoặc chạm chỗ trống khi chưa đặt) — đặt lại bao nhiêu lần cũng được cho tới khi đánh
   let tablePull = null;
   canvas.addEventListener('pointermove', e => {
     hover = toPlay(e);
-    if (!isAiming()) return;
+    if (cueDrag || !isAiming()) return;
     if (tablePull) {
       const r = canvas.getBoundingClientRect();
       setPower(Math.hypot(e.clientX - tablePull.x, e.clientY - tablePull.y) / (Math.min(r.width, r.height) * 0.6));
@@ -801,14 +877,23 @@
   });
   canvas.addEventListener('pointerdown', e => {
     hover = toPlay(e);
-    if (isPlacing()) { place(hover); return; }
+    if (!hover) return;
+    if (canPlace()) {
+      const c = balls[0];
+      if (!c.on || Math.hypot(hover.x - c.x, hover.y - c.y) < R * 3) {
+        cueDrag = true; canvas.setPointerCapture(e.pointerId); return;
+      }
+    }
     if (!isAiming()) return;
     canvas.setPointerCapture(e.pointerId);
     if (e.pointerType === 'mouse' && e.button === 0) { tablePull = { x: e.clientX, y: e.clientY }; setPower(0); }
     else aimAt(hover);
   });
-  canvas.addEventListener('pointerup', () => { if (tablePull) { tablePull = null; shoot(); } });
-  canvas.addEventListener('pointercancel', () => { if (tablePull) { tablePull = null; setPower(0); } });
+  canvas.addEventListener('pointerup', () => {
+    if (cueDrag) { cueDrag = false; if (hover) place(hover); return; }
+    if (tablePull) { tablePull = null; shoot(); }
+  });
+  canvas.addEventListener('pointercancel', () => { cueDrag = false; if (tablePull) { tablePull = null; setPower(0); } });
 
   // Thanh lực: kéo tới đâu lực tới đó, thả tay là đánh
   let pullStart = null;
@@ -874,7 +959,7 @@
         renderUI();
       }
     }
-    draw();
+    render3D(now);
     requestAnimationFrame(loop);
   }
 

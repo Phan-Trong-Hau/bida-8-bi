@@ -1,6 +1,6 @@
 # Bida 8 Bi
 
-Trò chơi bida 8 bi chạy trên trình duyệt, ưu tiên điện thoại, cho 2 người chơi.
+Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điện thoại, cho 2 người chơi.
 
 ## Hai chế độ
 
@@ -18,6 +18,6 @@ Trò chơi bida 8 bi chạy trên trình duyệt, ưu tiên điện thoại, cho
 
 - Sau cú phá bàn vẫn mở. Người đầu tiên đưa bi vào lỗ hợp lệ sẽ nhận nhóm đó: **bi trơn (1–7)** hoặc **bi sọc (9–15)**.
 - Đưa được bi của mình vào lỗ thì đánh tiếp; không thì đổi lượt.
-- **Lỗi** (đối thủ được đặt bi cái ở bất kỳ đâu): bi cái rơi xuống lỗ, bi cái không chạm bi nào, hoặc chạm bi của nhóm khác trước.
+- **Lỗi** (đối thủ được đặt bi cái ở bất kỳ đâu, kéo đổi chỗ bao nhiêu lần cũng được cho tới khi đánh): bi cái rơi xuống lỗ, bi cái không chạm bi nào, hoặc chạm bi của nhóm khác trước.
 - Sạch nhóm rồi đưa bi 8 vào lỗ đúng luật → **thắng**. Đưa bi 8 vào lỗ sớm hoặc kèm lỗi → **thua**.
 - Bi 8 rơi khi phá bàn được đặt lại vào điểm chân bàn. Hai người luân phiên phá bàn qua mỗi ván.
