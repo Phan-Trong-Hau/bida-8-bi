@@ -238,6 +238,11 @@
   .card h2 { margin: 0; font-family: var(--display); font-size: 28px; text-transform: uppercase; letter-spacing: .04em; color: var(--brass); }
   .card .row { display: flex; gap: 10px; }
   .card .avatar { width: 46px; height: 46px; }
+  .modal.loading { background: rgba(14,17,20,.94); z-index: 4; }
+  .spinwrap { display: grid; justify-items: center; gap: 12px; color: var(--muted); font-weight: 500; }
+  .spinwrap p { margin: 0; }
+  .spinner { width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--brass); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .card .note { margin: 0; color: var(--muted); font-size: 13px; }
   .card input {
     width: 100%; min-width: 0; box-sizing: border-box; font: inherit; font-size: 13px; padding: 8px 10px;
@@ -271,6 +276,9 @@
     <canvas class="fxc" id="fxc" aria-hidden="true"></canvas>
     <div class="flair" id="flair" hidden></div>
     <div class="toast" id="toast" hidden></div>
+    <div class="modal loading" id="loading" hidden>
+      <div class="spinwrap"><span class="spinner" aria-hidden="true"></span><p id="loadingText">Đang vào bàn…</p></div>
+    </div>
     <div class="modal" id="invite" hidden>
       <div class="card">
         <h2>Mời bạn chơi</h2>
@@ -422,7 +430,7 @@
     return {
       v: 1, balls: rackBalls(), cur: b, breaker: b,
       groups: { p0: null, p1: null }, wins: prev ? { ...prev.wins } : { p0: 0, p1: 0 },
-      isBreak: true, phase: 'aim', winner: -1, reason: '',
+      isBreak: true, phase: 'place', winner: -1, reason: '', // phá bi: được đặt bi trắng trong vùng đầu bàn
       event: { id: rid(), kind: 'start', who: b }, shot: null,
       seats: prev ? { ...prev.seats } : { p0: null, p1: null },
       reset: { p0: false, p1: false }, seq: (prev ? prev.seq : 0) + 1,
@@ -609,6 +617,7 @@
 
   function free(x, y, self) {
     if (x < R || x > W - R || y < R || y > H - R) return false;
+    if (self && self.n === 0 && S.isBreak && x > HEAD.x) return false; // phá bi: chỉ trong vùng đầu bàn
     return balls.every(b => b === self || !b.on || Math.hypot(b.x - x, b.y - y) >= 2 * R + 0.5);
   }
 
@@ -816,11 +825,11 @@
     let settled = false;
     mainRef.onSnapshot(snap => {
       if (!settled) {
-        if (snap.metadata.fromCache) { if (snap.exists) { online = true; onRemote(snap); } return; }
-        settled = true; online = true;
+        if (snap.metadata.fromCache) { if (snap.exists) { online = true; onRemote(snap); hideLoading(); } return; }
+        settled = true; online = true; hideLoading();
         if (!snap.exists) { if (canWrite !== false) createTable(); return; }
         onRemote(snap);
-        popup({ kind: S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
+        popup(joinEvent());
         return;
       }
       onRemote(snap);
@@ -870,7 +879,7 @@
         clearTimeout(createTimer);
         createTimer = setTimeout(() => {
           if (gotState) return;
-          gotState = true; online = true; synced = true; creating = false;
+          gotState = true; online = true; synced = true; creating = false; hideLoading();
           claimIfFree();
           commit({ felt: prefs.felt });
           showInvite();
@@ -897,9 +906,9 @@
         }
         if (!gotState) {
           gotState = true; online = true; synced = false;
-          applyRemote(normalize(msg.s));
+          applyRemote(normalize(msg.s)); hideLoading();
           claimIfFree();
-          popup({ kind: S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
+          popup(joinEvent());
           if (!S.seats.p0 || !S.seats.p1) showInvite();
         } else if (msg.from !== myId) receive(normalize(msg.s));
       } else if (tp.endsWith('/patch') && msg.p && msg.from !== myId && gotState) {
@@ -909,6 +918,13 @@
     mq.on('offline', () => { if (!wasOffline) { wasOffline = true; popup({ kind: 'left' }); } });
     mq.on('error', e => console.warn('mqtt', e));
   }
+  let loadTimer = null;
+  function showLoading() {
+    $('loadingText').textContent = 'Đang vào bàn…'; $('loading').hidden = false;
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => { $('loadingText').textContent = 'Mạng hơi chậm, vẫn đang kết nối…'; }, 10000);
+  }
+  function hideLoading() { clearTimeout(loadTimer); $('loading').hidden = true; }
   function showInvite() {
     $('inviteCode').textContent = roomId;
     $('inviteLink').value = roomLink();
@@ -1153,6 +1169,11 @@
     stickInner.position.x = -(R + 4 + power * 90);
   }
 
+  // vạch phá và vùng đầu bàn (được đặt bi trắng khi phá)
+  const headLine = new THREE.Mesh(new THREE.PlaneGeometry(1.4, H), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .16 }));
+  headLine.rotation.x = -Math.PI / 2; headLine.position.copy(T(HEAD.x, H / 2, .15)); scene.add(headLine);
+  const kitchen = new THREE.Mesh(new THREE.PlaneGeometry(HEAD.x, H), new THREE.MeshBasicMaterial({ color: 0x84c6e8, transparent: true, opacity: .1, depthWrite: false }));
+  kitchen.rotation.x = -Math.PI / 2; kitchen.position.copy(T(HEAD.x / 2, H / 2, .2)); scene.add(kitchen);
   // vòng sáng ở miệng lỗ khi bi rơi
   const flashGeo = new THREE.RingGeometry(1, 1.35, 40), pocketFx = [];
   function pocketFlash(px, py) {
@@ -1172,6 +1193,7 @@
     if (!aiming) objLine.visible = defLine.visible = false;
     if (aiming) updateAim();
     const placing = canPlace();
+    kitchen.visible = placing && S.isBreak;
     handRing.visible = placing && balls[0].on && !cueDrag;
     if (handRing.visible) {
       handRing.position.copy(T(balls[0].x, balls[0].y, .9));
@@ -1309,6 +1331,7 @@
     need8: 'phải chạm bi 8 trước', early8: 'chạm bi 8 khi chưa có nhóm bi',
   };
   const GROUP_TEXT = { solid: 'bi trơn (1–7)', stripe: 'bi sọc (9–15)' };
+  const joinEvent = () => ({ kind: S.isBreak ? 'start' : S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
   function popup(ev) {
     celebrate(ev);
     const t = $('toast'), fx = ev.fx || {};
@@ -1316,7 +1339,10 @@
     const by = fx.by != null ? whoName(fx.by) : '';
     let main, sub = '', foul = false;
     switch (ev.kind) {
-      case 'start': main = cap(n) + ' phá bi mở màn'; break;
+      case 'start':
+        main = cap(n) + ' phá bi mở màn';
+        if (!online || ev.who === mySeat()) sub = 'Có thể kéo bi trắng trong vùng đầu bàn để chọn chỗ phá';
+        break;
       case 'turn': main = 'Tới lượt ' + n; if (by && fx.by !== ev.who) sub = cap(by) + ' không ăn được bi'; break;
       case 'again': main = cap(n) + ' ăn bi, được đánh tiếp'; break;
       case 'foul':
@@ -1681,7 +1707,8 @@
     if (lobbyMode === 'start') {
       started = true;
       if (!hasNet()) { S.felt = prefs.felt; renderUI(); popup(S.event); }
-      initOnline().catch(e => console.warn('online', e));
+      if (hasNet()) showLoading();
+      initOnline().catch(e => console.warn('online', e)).then(() => { if (!mq && !mainRef) hideLoading(); });
     } else if (online) {
       announceMe();
       if (mySeat() === 0 && S.felt !== prefs.felt) commit({ felt: prefs.felt });
