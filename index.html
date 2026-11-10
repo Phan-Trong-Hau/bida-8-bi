@@ -313,7 +313,9 @@
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
       actx = new AC();
       master = actx.createDynamicsCompressor();
-      master.threshold.value = -14; master.ratio.value = 6; master.connect(actx.destination);
+      master.threshold.value = -14; master.ratio.value = 6;
+      const warm = actx.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 2400; warm.Q.value = .5;
+      master.connect(warm); warm.connect(actx.destination);
       buildSounds();
     }
     if (actx.state === 'suspended') actx.resume().catch(() => {});
@@ -359,29 +361,30 @@
     }
   }
   function buildSounds() {
+    // Tông gỗ trầm ấm: cộng hưởng 80–1700 Hz, không có tiếng tách tần số cao
     bufs = {
       click: [0, 1, 2].map(v => {
-        const j = 1 + (v - 1) * .06;
-        return mkBuf(.07, (d, sr) => {
-          tick(d, sr, .0008, .6);
-          modes(d, sr, [[3050 * j, 1, .009], [4580 * j, .65, .006], [6250 * j, .45, .0045], [8300 * j, .3, .0035], [2250 * j, .2, .012]]);
+        const j = 1 + (v - 1) * .08;
+        return mkBuf(.12, (d, sr) => {
+          burst(d, sr, .003, 1400, 0, .5);
+          modes(d, sr, [[620 * j, 1, .02], [1040 * j, .55, .013], [1680 * j, .25, .008], [310 * j, .35, .025]]);
         });
       }),
-      cue: mkBuf(.06, (d, sr) => {
-        burst(d, sr, .0035, 2200);
-        modes(d, sr, [[330, .5, .012], [1150, .35, .006], [3050, .25, .006], [4580, .15, .004]]);
+      cue: mkBuf(.12, (d, sr) => {
+        burst(d, sr, .004, 900, 0, .8);
+        modes(d, sr, [[240, .8, .032], [520, .5, .02], [880, .28, .012]]);
       }),
-      cushion: mkBuf(.14, (d, sr) => {
-        burst(d, sr, .022, 380);
-        modes(d, sr, [[105, .6, .03], [210, .2, .02]]);
+      cushion: mkBuf(.18, (d, sr) => {
+        burst(d, sr, .03, 240);
+        modes(d, sr, [[85, .8, .045], [160, .3, .03]]);
       }),
-      pocket: mkBuf(.5, (d, sr) => {
-        burst(d, sr, .035, 260);
-        modes(d, sr, [[82, .7, .06], [150, .3, .04]]);
-        [.11, .19, .26, .34].forEach((s, i) => {
-          const a = .35 / (i + 1);
-          tick(d, sr, .0006, a * .6, s);
-          modes(d, sr, [[2300, 1, .006], [3500, .6, .004]], s, a);
+      pocket: mkBuf(.6, (d, sr) => {
+        burst(d, sr, .045, 200);
+        modes(d, sr, [[66, .8, .08], [122, .4, .05]]);
+        [.12, .21, .29, .38].forEach((s, i) => {
+          const a = .3 / (i + 1);
+          burst(d, sr, .003, 1000, s, a);
+          modes(d, sr, [[520, 1, .018], [880, .5, .012]], s, a);
         });
       }),
     };
