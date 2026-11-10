@@ -215,7 +215,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 (() => {
   const W = 1000, H = 500, RAIL = 46, R = 11;
@@ -311,7 +311,7 @@
     if (online && mainRef) {
       const p = JSON.parse(JSON.stringify(patch));
       writeQ = writeQ.then(() => mainRef.update(p)).catch(e => console.warn('db write', e));
-    } else if (online && peerConn) peerSend({ t: 'patch', p: JSON.parse(JSON.stringify(patch)) });
+    } else if (online && mq) mqSend(JSON.parse(JSON.stringify(patch)));
   }
 
   function afterState(prev) {
@@ -627,7 +627,7 @@
   }
 
   async function initOnline() {
-    if (!window.claude || !window.claude.use) return initP2P();
+    if (!window.claude || !window.claude.use) return initRoom();
     const db = await window.claude.use('db');
     if (!db) return;
     userCap = await window.claude.use('user');
@@ -649,70 +649,74 @@
     }, e => console.warn('db', e));
   }
 
-  // ---------- Chơi qua link (GitHub Pages): nối trực tiếp 2 máy bằng PeerJS ----------
-  // Người mở link đầu tiên tạo phòng (ghế 1), link có #r-<mã phòng>; người mở link đó vào ghế 2.
-  let peer = null, peerConn = null, isHost = false;
-  const ROOM_PREFIX = 'bida8-';
-  function peerSend(msg) { try { if (peerConn && peerConn.open) peerConn.send(msg); } catch (e) { console.warn('p2p', e); } }
+  // ---------- Chơi qua link (GitHub Pages): trung chuyển qua máy chủ MQTT công cộng (WebSocket bảo mật) ----------
+  // Link phòng có dạng #r-<mã>. Trạng thái ván được giữ (retained) trên máy chủ nên tải lại trang vẫn tiếp tục được.
+  // Mỗi tab trình duyệt là một người chơi (mã lưu trong sessionStorage).
+  const BROKER = 'wss://broker.emqx.io:8084/mqtt';
+  let mq = null, roomId = null, gotState = false, wasOffline = false;
+  const topic = k => 'bida8/' + roomId + '/' + k;
   const roomLink = () => location.href.split('#')[0] + '#r-' + roomId;
-  let roomId = null;
-  function initP2P() {
-    if (!window.Peer) return;
+  function mqSend(patch) {
+    if (!mq || !mq.connected) return;
+    mq.publish(topic('patch'), JSON.stringify({ from: myId, p: patch }), { qos: 1 });
+    mq.publish(topic('state'), JSON.stringify({ from: myId, s: S }), { qos: 1, retain: true });
+  }
+  function claimIfFree() {
+    if (mySeat() >= 0) return;
+    const k = !S.seats.p0 ? 'p0' : !S.seats.p1 ? 'p1' : null;
+    if (k) commit({ seats: { [k]: myId } });
+  }
+  function receive(d) {
+    const prev = S;
+    applyRemote(d);
+    const me = mySeat();
+    if (me >= 0) {
+      const o = 'p' + (1 - me);
+      if (!prev.seats[o] && S.seats[o]) { $('invite').hidden = true; popup({ kind: 'joined', who: 1 - me }); }
+    }
+  }
+  function initRoom() {
+    if (!window.mqtt) return;
+    try { myId = sessionStorage.getItem('bida.me'); } catch (e) {}
+    if (!myId) { myId = 'u' + rid() + rid(); try { sessionStorage.setItem('bida.me', myId); } catch (e) {} }
     const m = location.hash.match(/^#r-([a-z0-9]+)$/);
-    let hosted = null; try { hosted = localStorage.getItem('bida.hostRoom'); } catch (e) {}
-    if (m && m[1] !== hosted) joinRoom(m[1]); else hostRoom(m ? m[1] : rid(), 0);
-  }
-  function onPeerData(msg) {
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.t === 'full') {
-      synced = false; applyRemote(normalize(msg.s));
-      popup({ kind: S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
-    } else if (msg.t === 'patch' && msg.p) applyRemote(normalize(merge(S, msg.p)));
-  }
-  function hostRoom(id, tries) {
-    isHost = true; myId = 'host'; roomId = id;
-    try { localStorage.setItem('bida.hostRoom', id); } catch (e) {}
-    history.replaceState(null, '', '#r-' + id);
-    peer = new Peer(ROOM_PREFIX + id);
-    peer.on('open', () => {
-      online = true; synced = true;
-      commit({ seats: { p0: 'host' } });
-      if (!S.seats.p1) showInvite();
-    });
-    peer.on('connection', conn => {
-      if (peerConn && peerConn.open) { conn.on('open', () => conn.close()); return; }
-      peerConn = conn;
-      conn.on('open', () => {
-        const prev = S; S = merge(S, { seats: { p1: 'guest' } }); afterState(prev);
-        conn.send({ t: 'full', s: S });
-        $('invite').hidden = true; popup({ kind: 'joined' });
+    roomId = m ? m[1] : rid() + rid().slice(0, 4);
+    history.replaceState(null, '', '#r-' + roomId);
+    mq = mqtt.connect(BROKER, { clientId: 'bida8_' + rid() + rid(), clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 30 });
+    mq.on('connect', () => {
+      if (wasOffline) { wasOffline = false; popup({ kind: 'back' }); }
+      mq.subscribe([topic('state'), topic('patch')], { qos: 1 }, () => {
+        if (gotState) return;
+        // không có ván nào được lưu cho phòng này: mình là người tạo phòng
+        setTimeout(() => {
+          if (gotState) return;
+          gotState = true; online = true; synced = true;
+          claimIfFree();
+          showInvite();
+        }, 1500);
       });
-      conn.on('data', onPeerData);
-      conn.on('close', () => { if (peerConn === conn) { peerConn = null; popup({ kind: 'left' }); } });
     });
-    peer.on('error', e => {
-      // tải lại trang: mã phòng cũ có thể còn giữ vài giây, thử lại
-      if (e.type === 'unavailable-id' && tries < 6) { peer.destroy(); setTimeout(() => hostRoom(id, tries + 1), 2500); }
-      else console.warn('peer', e);
+    mq.on('message', (tp, buf) => {
+      let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
+      if (!msg || typeof msg !== 'object') return;
+      if (tp.endsWith('/state') && msg.s) {
+        if (!gotState) {
+          gotState = true; online = true; synced = false;
+          applyRemote(normalize(msg.s));
+          claimIfFree();
+          popup({ kind: S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
+          if (!S.seats.p0 || !S.seats.p1) showInvite();
+        } else if (msg.from !== myId) receive(normalize(msg.s));
+      } else if (tp.endsWith('/patch') && msg.p && msg.from !== myId && gotState) {
+        receive(normalize(merge(S, msg.p)));
+      }
     });
-  }
-  function joinRoom(id) {
-    myId = 'guest'; roomId = id;
-    peer = new Peer();
-    const connect = () => {
-      const conn = peer.connect(ROOM_PREFIX + id, { reliable: true });
-      conn.on('open', () => { peerConn = conn; online = true; });
-      conn.on('data', onPeerData);
-      conn.on('close', () => { if (peerConn === conn) { peerConn = null; popup({ kind: 'left' }); setTimeout(connect, 2000); } });
-    };
-    peer.on('open', connect);
-    peer.on('error', e => {
-      if (e.type === 'peer-unavailable') { popup({ kind: 'noroom' }); setTimeout(connect, 3000); }
-      else console.warn('peer', e);
-    });
+    mq.on('offline', () => { if (!wasOffline) { wasOffline = true; popup({ kind: 'left' }); } });
+    mq.on('error', e => console.warn('mqtt', e));
   }
   function showInvite() {
     $('inviteLink').value = roomLink();
+    $('copyBtn').textContent = navigator.share ? 'Gửi link' : 'Copy link';
     $('invite').hidden = false;
   }
   $('closeInvite').addEventListener('click', () => { $('invite').hidden = true; });
@@ -723,7 +727,7 @@
       await navigator.clipboard.writeText(url); $('copyBtn').textContent = 'Đã copy';
     } catch (e) { $('inviteLink').select(); }
   });
-  $('who1').addEventListener('click', () => { if (isHost && !S.seats.p1) showInvite(); });
+  [0, 1].forEach(i => $('who' + i).addEventListener('click', () => { if (mq && !S.seats['p' + i]) showInvite(); }));
 
   // ---------- Vẽ 3D (Three.js) ----------
   // Toạ độ vật lý (x, y) trên mặt bàn → thế giới 3D (x - W/2, cao, y - H/2)
@@ -1012,7 +1016,8 @@
       case 'again': text = cap(n) + ' đánh tiếp'; break;
       case 'foul': text = 'Lỗi · ' + cap(n) + ' đặt bi cái'; foul = true; break;
       case 'bad': text = 'Không đặt được'; foul = true; break;
-      case 'joined': text = 'Người 2 đã vào bàn'; break;
+      case 'joined': text = cap(n) + ' đã vào bàn'; break;
+      case 'back': text = 'Đã kết nối lại'; break;
       case 'left': text = 'Mất kết nối'; foul = true; break;
       case 'noroom': text = 'Đang tìm phòng…'; break;
       default: return;

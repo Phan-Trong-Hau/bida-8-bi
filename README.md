@@ -8,7 +8,7 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 
 ## Các chế độ
 
-- **Qua link GitHub Pages:** hai máy nối thẳng với nhau bằng [PeerJS](https://peerjs.com/) (WebRTC), không cần tài khoản. Người mở trang trước tạo phòng (ghế 1), link có dạng `.../#r-<mã phòng>`; ai mở link đó vào ghế 2. Chỉ người tới lượt mới đánh được, xếp lại bàn cần cả hai đồng ý.
+- **Qua link GitHub Pages:** hai máy trao đổi qua máy chủ MQTT công cộng `broker.emqx.io` (WebSocket bảo mật), không cần tài khoản và không bị chặn bởi kiểu mạng. Người mở trang trước tạo phòng (ghế 1), link có dạng `.../#r-<mã phòng>`; ai mở link đó vào ghế 2. Trạng thái ván được giữ trên máy chủ nên tải lại trang vẫn chơi tiếp. Chỉ người tới lượt mới đánh được, xếp lại bàn cần cả hai đồng ý. Mỗi tab trình duyệt là một người chơi.
 
 - **Online (khi mở qua link claude.ai):** mỗi người chơi trên máy của mình. Người mở trước ngồi ghế 1, người thứ hai ngồi ghế 2, ai mở sau nữa chỉ được xem. Chỉ người tới lượt mới ngắm, kéo lực và đánh được. Người còn lại xem bi chạy trực tiếp. Xếp lại bàn hoặc chơi ván mới cần **cả hai đồng ý**. Trạng thái bàn được lưu bằng capability `db` của artifact (`tables/main`).
 - **Chung một máy (mở `index.html` trực tiếp):** hai người thay phiên trên cùng một máy.
