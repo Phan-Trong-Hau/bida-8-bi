@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- ARTIFACT:BEGIN -->
+<title>Bida 8 Bi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Be+Vietnam+Pro:wght@400;500;600&display=swap">
+<style>
+  /* Layout: một cột như phòng bida — hai thẻ người chơi phía trên, bàn chiếm toàn bộ chiều ngang, gậy & lực bên dưới */
+  :root {
+    --room: #121619;
+    --panel: #1a2026;
+    --line: #2b343c;
+    --ink: #ebe6da;
+    --muted: #97a1a8;
+    --brass: #d8a94f;
+    --chalk: #84c6e8;
+    --foul: #e2735d;
+    --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+  html, body { background: var(--room); color: var(--ink); }
+  body { font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  .app {
+    max-width: 1120px; margin: 0 auto;
+    padding-block: 20px 36px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 16px;
+  }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+  h1 {
+    margin: 0; font-family: var(--display); font-weight: 700; font-size: 34px;
+    letter-spacing: .04em; text-transform: uppercase; text-wrap: balance;
+  }
+  h1 span { color: var(--brass); }
+  .sub { margin: 0; color: var(--muted); font-size: 13px; }
+
+  .players { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; }
+  .player {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; display: grid; gap: 6px; min-width: 0;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .player.active { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+  .player .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .turn-chip {
+    font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--room); background: var(--brass); border-radius: 99px; padding: 1px 8px;
+    visibility: hidden; white-space: nowrap;
+  }
+  .player.active .turn-chip { visibility: visible; }
+  .player input {
+    flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 1px dashed transparent;
+    color: var(--ink); font-family: var(--display); font-weight: 600; font-size: 24px; padding: 0;
+  }
+  .player input:hover, .player input:focus { border-bottom-color: var(--line); outline: none; }
+  .player input:focus-visible { border-bottom-color: var(--chalk); }
+  .group { font-size: 13px; color: var(--muted); }
+  .rack { display: flex; flex-wrap: wrap; gap: 4px; min-height: 18px; }
+  .dot {
+    width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 9px; font-weight: 600; color: #111; box-shadow: inset -2px -2px 3px rgba(0,0,0,.35);
+  }
+  .dot i { font-style: normal; background: #f4f1e8; border-radius: 50%; width: 10px; height: 10px; display: grid; place-items: center; line-height: 1; }
+  .dot.gone { opacity: .18; }
+  .score {
+    display: grid; place-items: center; align-content: center; gap: 2px; padding: 0 6px;
+    font-family: var(--display); text-align: center;
+  }
+  .score b { font-size: 34px; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+  .score small { font-family: var(--body); font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+
+  .table-wrap { position: relative; }
+  canvas {
+    display: block; width: 100%; height: auto; aspect-ratio: 1092 / 592; max-width: 100%;
+    touch-action: none; border-radius: 18px; cursor: crosshair;
+  }
+  .status {
+    margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line);
+    font-weight: 500;
+  }
+  .status.foul { border-color: var(--foul); color: #f3c3b8; }
+
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .power { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; }
+  .power label { font-size: 13px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  .power input { flex: 1; min-width: 0; accent-color: var(--brass); }
+  .power output { font-variant-numeric: tabular-nums; width: 3.2em; text-align: right; font-weight: 600; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; border-radius: 8px; padding: 9px 18px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+  button.primary { background: var(--brass); color: #1b1408; border-color: var(--brass); }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+  .hint { margin: 0; color: var(--muted); font-size: 13px; }
+  .hint kbd { font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--ink); }
+
+  .overlay {
+    position: absolute; inset: 0; display: grid; place-items: center; border-radius: 18px;
+    background: rgba(10, 13, 16, .72);
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--brass); border-radius: 12px; padding: 22px 26px;
+    text-align: center; display: grid; gap: 10px; max-width: min(420px, 90%);
+  }
+  .card h2 { margin: 0; font-family: var(--display); font-size: 36px; text-transform: uppercase; letter-spacing: .04em; color: var(--brass); }
+  .card p { margin: 0; color: var(--muted); }
+
+  @media (max-width: 600px) {
+    .players { grid-template-columns: 1fr 1fr; }
+    .score { grid-column: 1 / -1; order: -1; grid-auto-flow: column; gap: 10px; }
+    .score b { font-size: 26px; }
+    h1 { font-size: 28px; }
+    canvas, .overlay { border-radius: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .player { transition: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Bida <span>8</span> Bi</h1>
+    <p class="sub">Hai người chơi chung một máy · đánh xong tới lượt người kia</p>
+  </header>
+
+  <section class="players" aria-label="Người chơi">
+    <div class="player" id="p0">
+      <div class="top"><input id="name0" maxlength="18" aria-label="Tên người chơi 1"><span class="turn-chip">Đang đánh</span></div>
+      <div class="group" id="group0"></div>
+      <div class="rack" id="rack0"></div>
+    </div>
+    <div class="score"><small>Tỉ số</small><b id="wins">0 – 0</b></div>
+    <div class="player" id="p1">
+      <div class="top"><input id="name1" maxlength="18" aria-label="Tên người chơi 2"><span class="turn-chip">Đang đánh</span></div>
+      <div class="group" id="group1"></div>
+      <div class="rack" id="rack1"></div>
+    </div>
+  </section>
+
+  <div class="table-wrap">
+    <canvas id="table" width="1092" height="592" aria-label="Bàn bida"></canvas>
+    <div class="overlay" id="overlay" hidden>
+      <div class="card">
+        <h2 id="winTitle"></h2>
+        <p id="winReason"></p>
+        <div><button class="primary" id="againBtn">Ván mới</button></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="status" id="status" role="status"></p>
+
+  <div class="controls">
+    <div class="power">
+      <label for="power">Lực</label>
+      <input type="range" id="power" min="5" max="100" value="55">
+      <output id="powerOut" for="power">55%</output>
+    </div>
+    <div class="btns">
+      <button class="primary" id="shootBtn">Đánh</button>
+      <button id="newBtn">Xếp lại bàn</button>
+    </div>
+  </div>
+  <p class="hint">Máy tính: rê chuột để ngắm, bấm chuột hoặc <kbd>Space</kbd> để đánh, <kbd>←</kbd><kbd>→</kbd> chỉnh góc, <kbd>↑</kbd><kbd>↓</kbd> chỉnh lực.
+    Điện thoại: chạm/kéo trên bàn để ngắm rồi bấm “Đánh”. Khi đối thủ phạm lỗi, bạn được đặt bi cái ở bất kỳ đâu.</p>
+</div>
+
+<script>
+(() => {
+  const W = 1000, H = 500, RAIL = 46, R = 11;
+  const CW = W + RAIL * 2, CH = H + RAIL * 2;
+  const MAXV = 30, SUB = 10;
+  const COLORS = { 1: '#f0bf2a', 2: '#1f4fb8', 3: '#d23a2a', 4: '#5b2a86', 5: '#ee7a20', 6: '#1d8a4b', 7: '#7a1f24', 8: '#141414' };
+  const colorOf = n => COLORS[n > 8 ? n - 8 : n];
+  const POCKETS = [
+    { x: -5, y: -5, r: 25 }, { x: W / 2, y: -12, r: 23 }, { x: W + 5, y: -5, r: 25 },
+    { x: -5, y: H + 5, r: 25 }, { x: W / 2, y: H + 12, r: 23 }, { x: W + 5, y: H + 5, r: 25 },
+  ];
+  const HEAD = { x: W * 0.25, y: H / 2 }, FOOT = { x: W * 0.73, y: H / 2 };
+
+  const $ = id => document.getElementById(id);
+  const canvas = $('table'), ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = CW * dpr; canvas.height = CH * dpr;
+
+  const store = {
+    get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  const players = [
+    { name: store.get('bida.name0', 'Người chơi 1'), wins: 0, group: null },
+    { name: store.get('bida.name1', 'Người chơi 2'), wins: 0, group: null },
+  ];
+  let balls = [], cur = 0, breaker = 0, state = 'aim', aim = 0, power = 0.55;
+  let shot = null, isBreak = true, hover = null, msg = '', msgFoul = false;
+
+  const groupOf = n => n === 8 ? 'eight' : n < 8 ? 'solid' : 'stripe';
+  const groupName = g => g === 'solid' ? 'bi trơn (1–7)' : g === 'stripe' ? 'bi sọc (9–15)' : 'bi 8';
+  const nums = g => g === 'solid' ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
+  const onTable = n => balls.some(b => b.n === n && b.on);
+  const remaining = g => nums(g).filter(onTable).length;
+  const cue = () => balls[0];
+
+  function newGame() {
+    balls = [{ n: 0, x: HEAD.x, y: HEAD.y, vx: 0, vy: 0, on: true }];
+    const rows = [[1], [9, 2], [10, 8, 3], [11, 4, 12, 5], [6, 13, 14, 7, 15]];
+    const dx = R * Math.sqrt(3) + 0.3;
+    rows.forEach((row, i) => row.forEach((n, j) => balls.push({
+      n, x: FOOT.x + i * dx, y: FOOT.y + (j - (row.length - 1) / 2) * (2 * R + 0.3), vx: 0, vy: 0, on: true,
+    })));
+    players.forEach(p => p.group = null);
+    cur = breaker; state = 'aim'; isBreak = true; aim = 0; shot = null;
+    $('overlay').hidden = true;
+    say(`${players[cur].name} phá bi. Bàn đang mở.`);
+  }
+
+  function say(text, foul = false) { msg = text; msgFoul = foul; renderUI(); }
+
+  // ---------- Physics ----------
+  function inMouthX(x) { return x < 26 || x > W - 26 || Math.abs(x - W / 2) < 22; }
+  function inMouthY(y) { return y < 26 || y > H - 26; }
+
+  function pot(b) {
+    b.on = false; b.vx = b.vy = 0;
+    if (b.n === 0) shot.scratch = true; else shot.potted.push(b.n);
+  }
+
+  function step(dt) {
+    const act = balls.filter(b => b.on);
+    for (const b of act) { b.x += b.vx * dt; b.y += b.vy * dt; }
+    for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) {
+      const a = act[i], b = act[j];
+      const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+      if (d2 >= 4 * R * R || d2 === 0) continue;
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, ov = (2 * R - d) / 2;
+      a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
+      const dvn = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+      if (dvn <= 0) continue;
+      const j2 = dvn * (1 + 0.95) / 2;
+      a.vx -= j2 * nx; a.vy -= j2 * ny; b.vx += j2 * nx; b.vy += j2 * ny;
+      if (shot && shot.firstHit == null) {
+        if (a.n === 0) shot.firstHit = b.n; else if (b.n === 0) shot.firstHit = a.n;
+      }
+    }
+    for (const b of act) {
+      if (!b.on) continue;
+      if (b.y < R && !inMouthX(b.x)) { b.y = R; b.vy = -b.vy * 0.78; }
+      if (b.y > H - R && !inMouthX(b.x)) { b.y = H - R; b.vy = -b.vy * 0.78; }
+      if (b.x < R && !inMouthY(b.y)) { b.x = R; b.vx = -b.vx * 0.78; }
+      if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; b.vx = -b.vx * 0.78; }
+      if (POCKETS.some(p => Math.hypot(b.x - p.x, b.y - p.y) < p.r) ||
+          b.x < -R || b.x > W + R || b.y < -R || b.y > H + R) { pot(b); continue; }
+      const sp = Math.hypot(b.vx, b.vy);
+      if (sp > 0) {
+        const ns = sp - (0.045 + sp * 0.008) * dt;
+        if (ns < 0.02) { b.vx = b.vy = 0; } else { b.vx *= ns / sp; b.vy *= ns / sp; }
+      }
+    }
+  }
+
+  const moving = () => balls.some(b => b.on && (b.vx || b.vy));
+
+  // ---------- Rules ----------
+  function legalTarget(n) {
+    const g = players[cur].group;
+    if (!g) return n !== 8;
+    return remaining(g) === 0 ? n === 8 : groupOf(n) === g;
+  }
+
+  function shoot() {
+    if (state !== 'aim') return;
+    const c = cue();
+    c.vx = Math.cos(aim) * power * MAXV; c.vy = Math.sin(aim) * power * MAXV;
+    const g = players[cur].group;
+    shot = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false };
+    state = 'moving';
+    say(`${players[cur].name} đang đánh…`);
+  }
+
+  function respot8() {
+    const b = balls.find(b => b.n === 8);
+    b.on = true; b.vx = b.vy = 0; b.x = FOOT.x; b.y = FOOT.y;
+    while (!free(b.x, b.y, b) && b.x < W - R) b.x += 2 * R + 1;
+  }
+
+  function endShot() {
+    const P = players[cur], O = players[1 - cur], s = shot, g = P.group;
+    let foul = null;
+    if (s.scratch) foul = 'bi cái rơi xuống lỗ';
+    else if (s.firstHit == null) foul = 'bi cái không chạm bi nào';
+    else if (g) {
+      const target = s.cleared ? 'eight' : g;
+      if (groupOf(s.firstHit) !== target) foul = target === 'eight' ? 'phải chạm bi 8 trước' : `chạm ${groupName(groupOf(s.firstHit))} trước`;
+    } else if (s.firstHit === 8 && !isBreak) foul = 'chạm bi 8 trước khi có nhóm';
+
+    let note = '';
+    if (s.potted.includes(8)) {
+      if (isBreak) { respot8(); s.potted = s.potted.filter(n => n !== 8); note = 'Bi 8 vào lỗ khi phá nên được đặt lại. '; }
+      else if (g && s.cleared && !foul) return finish(cur, `${P.name} đưa bi 8 vào lỗ đúng luật.`);
+      else return finish(1 - cur, foul ? `${P.name} phạm lỗi (${foul}) khi bi 8 vào lỗ.` : `${P.name} đưa bi 8 vào lỗ quá sớm.`);
+    }
+
+    if (!g && !foul && !isBreak && s.potted.length) {
+      const t = groupOf(s.potted[0]);
+      P.group = t; O.group = t === 'solid' ? 'stripe' : 'solid';
+      note += `${P.name} nhận ${groupName(t)}. `;
+    }
+    const ownPotted = P.group ? s.potted.some(n => groupOf(n) === P.group) : s.potted.length > 0;
+    isBreak = false; shot = null;
+
+    if (foul) {
+      cur = 1 - cur; cue().on = false; state = 'place';
+      say(`${note}Lỗi: ${foul}. ${players[cur].name} được đặt bi cái — chạm vào bàn để đặt.`, true);
+    } else if (ownPotted) {
+      state = 'aim'; say(`${note}${P.name} vào bi, đánh tiếp.`);
+    } else {
+      cur = 1 - cur; state = 'aim'; say(`${note}Hết lượt. Tới ${players[cur].name}.`);
+    }
+  }
+
+  function finish(winner, reason) {
+    players[winner].wins++;
+    state = 'over'; shot = null; breaker = 1 - breaker;
+    $('winTitle').textContent = `${players[winner].name} thắng!`;
+    $('winReason').textContent = reason;
+    $('overlay').hidden = false;
+    say(`${players[winner].name} thắng ván này. ${reason}`);
+  }
+
+  function free(x, y, self) {
+    if (x < R || x > W - R || y < R || y > H - R) return false;
+    return balls.every(b => b === self || !b.on || Math.hypot(b.x - x, b.y - y) >= 2 * R + 0.5);
+  }
+
+  function place(p) {
+    const c = cue();
+    if (!free(p.x, p.y, c)) { say('Không đặt được ở đó — chọn chỗ trống trên mặt bàn.', true); return; }
+    c.x = p.x; c.y = p.y; c.vx = c.vy = 0; c.on = true; state = 'aim';
+    say(`${players[cur].name} đã đặt bi cái. Ngắm và đánh.`);
+  }
+
+  // ---------- Drawing ----------
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function drawTable() {
+    const wood = ctx.createLinearGradient(0, 0, 0, CH);
+    wood.addColorStop(0, '#6a4026'); wood.addColorStop(.5, '#4e2e1a'); wood.addColorStop(1, '#3a2112');
+    roundRect(0, 0, CW, CH, 18); ctx.fillStyle = wood; ctx.fill();
+    // cushions
+    ctx.fillStyle = '#16597a'; ctx.fillRect(RAIL - 12, RAIL - 12, W + 24, H + 24);
+    const felt = ctx.createRadialGradient(CW / 2, CH / 2, 40, CW / 2, CH / 2, CW * .6);
+    felt.addColorStop(0, '#2582ad'); felt.addColorStop(1, '#1a6489');
+    ctx.fillStyle = felt; ctx.fillRect(RAIL, RAIL, W, H);
+    // diamonds (sights) on the rails
+    ctx.fillStyle = '#e9d9a8';
+    for (let i = 1; i < 8; i++) {
+      if (i === 4) continue;
+      const x = RAIL + (W / 8) * i;
+      diamond(x, RAIL / 2 - 4); diamond(x, CH - RAIL / 2 + 4);
+    }
+    for (let i = 1; i < 4; i++) { const y = RAIL + (H / 4) * i; diamond(RAIL / 2 - 4, y); diamond(CW - RAIL / 2 + 4, y); }
+    // head string & foot spot
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(RAIL + HEAD.x, RAIL); ctx.lineTo(RAIL + HEAD.x, RAIL + H); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    ctx.beginPath(); ctx.arc(RAIL + FOOT.x, RAIL + FOOT.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    // pockets
+    for (const p of POCKETS) {
+      ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.arc(RAIL + p.x, RAIL + p.y, p.r + 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#050505'; ctx.beginPath(); ctx.arc(RAIL + p.x, RAIL + p.y, p.r + 1, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  function diamond(x, y) {
+    ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + 3, y); ctx.lineTo(x, y + 4); ctx.lineTo(x - 3, y); ctx.closePath(); ctx.fill();
+  }
+
+  function drawBall(b, alpha = 1) {
+    const { x, y, n } = b;
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.ellipse(x + 2.5, y + 3.5, R, R * .85, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.clip();
+    if (n === 0 || n > 8) { ctx.fillStyle = '#f4f1e8'; ctx.fillRect(x - R, y - R, 2 * R, 2 * R); }
+    if (n > 0) { ctx.fillStyle = colorOf(n); n > 8 ? ctx.fillRect(x - R, y - R * .56, 2 * R, R * 1.12) : ctx.fillRect(x - R, y - R, 2 * R, 2 * R); }
+    if (n > 0) {
+      ctx.fillStyle = '#f4f1e8'; ctx.beginPath(); ctx.arc(x, y, R * .5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.font = '700 8.5px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(n, x, y + .5);
+    }
+    const hl = ctx.createRadialGradient(x - R * .35, y - R * .4, 0, x - R * .35, y - R * .4, R * .9);
+    hl.addColorStop(0, 'rgba(255,255,255,.65)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl; ctx.fillRect(x - R, y - R, 2 * R, 2 * R);
+    const sh = ctx.createRadialGradient(x, y, R * .55, x, y, R);
+    sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.35)');
+    ctx.fillStyle = sh; ctx.fillRect(x - R, y - R, 2 * R, 2 * R);
+    ctx.restore();
+  }
+
+  function drawGuide() {
+    const c = cue(), dx = Math.cos(aim), dy = Math.sin(aim);
+    let t = Infinity, hit = null;
+    for (const b of balls) {
+      if (!b.on || b === c) continue;
+      const fx = b.x - c.x, fy = b.y - c.y, proj = fx * dx + fy * dy;
+      if (proj <= 0) continue;
+      const perp2 = fx * fx + fy * fy - proj * proj;
+      if (perp2 > 4 * R * R) continue;
+      const tt = proj - Math.sqrt(4 * R * R - perp2);
+      if (tt < t) { t = tt; hit = b; }
+    }
+    const tw = Math.min(
+      dx > 0 ? (W - R - c.x) / dx : dx < 0 ? (R - c.x) / dx : Infinity,
+      dy > 0 ? (H - R - c.y) / dy : dy < 0 ? (R - c.y) / dy : Infinity);
+    if (tw < t) { t = tw; hit = null; }
+    const gx = c.x + dx * t, gy = c.y + dy * t;
+    const bad = hit && !legalTarget(hit.n);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(gx, gy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = bad ? '#ff8a73' : 'rgba(255,255,255,.75)';
+    ctx.beginPath(); ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.stroke();
+    if (hit) {
+      let ox = hit.x - gx, oy = hit.y - gy; const ol = Math.hypot(ox, oy) || 1; ox /= ol; oy /= ol;
+      const len = 40 + power * 110;
+      ctx.strokeStyle = bad ? '#ff8a73' : '#9fd7f2'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(hit.x, hit.y); ctx.lineTo(hit.x + ox * len, hit.y + oy * len); ctx.stroke();
+      // cue ball deflection (tangent line)
+      let tx = -oy, ty = ox; if (tx * dx + ty * dy < 0) { tx = -tx; ty = -ty; }
+      const k = Math.abs(tx * dx + ty * dy);
+      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + tx * len * k, gy + ty * len * k); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawStick() {
+    const c = cue(), dx = Math.cos(aim), dy = Math.sin(aim);
+    const back = R + 6 + power * 70;
+    const seg = (from, to, w, col) => {
+      ctx.strokeStyle = col; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(c.x - dx * from, c.y - dy * from); ctx.lineTo(c.x - dx * to, c.y - dy * to); ctx.stroke();
+    };
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(c.x - dx * back + 4, c.y - dy * back + 6); ctx.lineTo(c.x - dx * (back + 420) + 4, c.y - dy * (back + 420) + 6); ctx.stroke();
+    seg(back + 290, back + 420, 9, '#2b170c');
+    seg(back + 270, back + 292, 8, '#d8a94f');
+    seg(back + 14, back + 272, 6, '#e3c48f');
+    seg(back + 4, back + 14, 5, '#f4f1e8');
+    seg(back, back + 4, 5, '#3f8fc0');
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, CW, CH);
+    drawTable();
+    ctx.translate(RAIL, RAIL);
+    if (state === 'aim') drawGuide();
+    for (const b of balls) if (b.on) drawBall(b);
+    if (state === 'aim') drawStick();
+    if (state === 'place' && hover) {
+      const ok = free(hover.x, hover.y, cue());
+      drawBall({ n: 0, x: hover.x, y: hover.y }, .6);
+      ctx.strokeStyle = ok ? '#9fd7f2' : '#ff8a73'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(hover.x, hover.y, R + 3, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  // ---------- UI ----------
+  function renderUI() {
+    players.forEach((p, i) => {
+      $('p' + i).classList.toggle('active', i === cur && state !== 'over');
+      const inp = $('name' + i); if (document.activeElement !== inp) inp.value = p.name;
+      const rack = $('rack' + i); rack.innerHTML = '';
+      if (!p.group) { $('group' + i).textContent = 'Chưa có nhóm — bàn mở'; return; }
+      const left = remaining(p.group);
+      $('group' + i).textContent = left ? `${groupName(p.group)} · còn ${left}` : 'Đã sạch nhóm · nhắm bi 8';
+      const list = left ? nums(p.group) : [8];
+      for (const n of list) {
+        const d = document.createElement('span');
+        d.className = 'dot' + (onTable(n) ? '' : ' gone');
+        d.style.background = n > 8 ? `linear-gradient(#f4f1e8 0 22%, ${colorOf(n)} 22% 78%, #f4f1e8 78%)` : colorOf(n);
+        d.innerHTML = `<i>${n}</i>`; d.title = `Bi ${n}`;
+        rack.appendChild(d);
+      }
+    });
+    $('wins').textContent = `${players[0].wins} – ${players[1].wins}`;
+    const st = $('status'); st.textContent = msg; st.classList.toggle('foul', msgFoul);
+    $('shootBtn').disabled = state !== 'aim';
+  }
+
+  function toPlay(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * CW - RAIL, y: (e.clientY - r.top) / r.height * CH - RAIL };
+  }
+  function aimAt(p) { const c = cue(); if (c.on) aim = Math.atan2(p.y - c.y, p.x - c.x); }
+
+  canvas.addEventListener('pointermove', e => {
+    hover = toPlay(e);
+    if (state === 'aim' && (e.pointerType === 'mouse' || e.buttons)) aimAt(hover);
+  });
+  canvas.addEventListener('pointerdown', e => {
+    hover = toPlay(e);
+    if (state === 'place') { place(hover); return; }
+    if (state !== 'aim') return;
+    aimAt(hover);
+    if (e.pointerType === 'mouse' && e.button === 0) shoot();
+  });
+
+  const powerEl = $('power');
+  powerEl.addEventListener('input', () => { power = powerEl.value / 100; $('powerOut').textContent = powerEl.value + '%'; });
+  $('shootBtn').addEventListener('click', shoot);
+  $('newBtn').addEventListener('click', newGame);
+  $('againBtn').addEventListener('click', newGame);
+  [0, 1].forEach(i => {
+    const inp = $('name' + i);
+    inp.addEventListener('input', () => { players[i].name = inp.value.trim() || `Người chơi ${i + 1}`; store.set('bida.name' + i, players[i].name); });
+    inp.addEventListener('blur', renderUI);
+  });
+  window.addEventListener('keydown', e => {
+    if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
+    if (e.target === powerEl && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    const fine = e.shiftKey ? 0.002 : 0.012;
+    if (e.key === 'ArrowLeft') { aim -= fine; e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { aim += fine; e.preventDefault(); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      powerEl.value = Math.max(5, Math.min(100, +powerEl.value + (e.key === 'ArrowUp' ? 5 : -5)));
+      powerEl.dispatchEvent(new Event('input')); e.preventDefault();
+    } else if (e.key === ' ' && e.target.tagName !== 'BUTTON') { shoot(); e.preventDefault(); }
+  });
+
+  let last = performance.now();
+  function loop(now) {
+    const frames = Math.min((now - last) / (1000 / 60), 3); last = now;
+    if (state === 'moving') {
+      const steps = Math.max(1, Math.round(frames * SUB));
+      for (let i = 0; i < steps; i++) step(1 / SUB);
+      if (!moving()) endShot();
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  newGame();
+  requestAnimationFrame(loop);
+})();
+</script>
+<!-- ARTIFACT:END -->
