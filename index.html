@@ -143,6 +143,10 @@
   .sw[aria-pressed="true"] { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
   .chip { flex: none; width: 34px; height: 24px; border-radius: 6px; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
   .chip.cue { width: 46px; height: 8px; border-radius: 4px; }
+  .roomrow { display: flex; gap: 8px; }
+  .roomrow input { flex: 1; min-width: 0; letter-spacing: .3em; font-variant-numeric: tabular-nums; }
+  .lb-err { margin: 0; color: var(--foul); font-size: 13px; }
+  .card .code { margin: 0; font-family: var(--display); font-size: 44px; line-height: 1; letter-spacing: .18em; color: var(--brass); font-variant-numeric: tabular-nums; }
   .lb-go { width: 100%; min-height: 52px; font-size: 17px; }
   .reset { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); flex: none; }
   .reset.waiting { color: var(--brass); border-color: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
@@ -217,7 +221,9 @@
     <div class="modal" id="invite" hidden>
       <div class="card">
         <h2>Mời bạn chơi</h2>
-        <p class="note">Gửi link này cho bạn của bạn. Họ mở là vào bàn.</p>
+        <p class="note">Mã phòng</p>
+        <p class="code" id="inviteCode"></p>
+        <p class="note">Gửi mã hoặc link này cho bạn của bạn.</p>
         <input id="inviteLink" readonly aria-label="Link phòng">
         <div class="row"><button id="closeInvite">Đóng</button><button class="primary" id="copyBtn">Gửi link</button></div>
       </div>
@@ -258,6 +264,10 @@
     <div class="field"><span class="lbl">Avatar</span><div class="balls" id="lbBalls" role="group" aria-label="Chọn bi làm avatar"></div></div>
     <div class="field" id="lbFeltField"><span class="lbl">Màu bàn</span><div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div></div>
     <div class="field"><span class="lbl">Màu gậy</span><div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div></div>
+    <div class="field" id="lbRoomField"><label class="lbl" for="lbRoom">Có mã phòng? Nhập để vào</label>
+      <div class="roomrow"><input id="lbRoom" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 số" autocomplete="off"><button id="lbJoin">Vào phòng</button></div>
+      <p class="lb-err" id="lbErr" hidden>Mã phòng gồm 4 chữ số.</p>
+    </div>
     <button class="primary lb-go" id="lbGo">Bắt đầu</button>
   </div>
 </div>
@@ -729,13 +739,15 @@
   // Link phòng có dạng #r-<mã>. Trạng thái ván được giữ (retained) trên máy chủ nên tải lại trang vẫn tiếp tục được.
   // Mỗi tab trình duyệt là một người chơi (mã lưu trong sessionStorage).
   const BROKER = 'wss://broker.emqx.io:8084/mqtt';
-  let mq = null, roomId = null, gotState = false, wasOffline = false;
+  let mq = null, roomId = null, gotState = false, wasOffline = false, creating = false, createTimer = null;
+  const code4 = () => String(Math.floor(1000 + Math.random() * 9000));
   const topic = k => 'bida8/' + roomId + '/' + k;
+  let retryRoom = () => {};
   const roomLink = () => location.href.split('#')[0] + '#r-' + roomId;
   function mqSend(patch) {
     if (!mq || !mq.connected) return;
     mq.publish(topic('patch'), JSON.stringify({ from: myId, p: patch }), { qos: 1 });
-    mq.publish(topic('state'), JSON.stringify({ from: myId, s: S }), { qos: 1, retain: true });
+    mq.publish(topic('state'), JSON.stringify({ from: myId, s: S, ts: Date.now() }), { qos: 1, retain: true });
   }
   function claimIfFree() {
     if (mySeat() >= 0) return;
@@ -756,27 +768,41 @@
     try { myId = sessionStorage.getItem('bida.me'); } catch (e) {}
     if (!myId) { myId = 'u' + rid() + rid(); try { sessionStorage.setItem('bida.me', myId); } catch (e) {} }
     const m = location.hash.match(/^#r-([a-z0-9]+)$/);
-    roomId = m ? m[1] : rid() + rid().slice(0, 4);
-    history.replaceState(null, '', '#r-' + roomId);
-    mq = mqtt.connect(BROKER, { clientId: 'bida8_' + rid() + rid(), clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 30 });
-    mq.on('connect', () => {
-      if (wasOffline) { wasOffline = false; popup({ kind: 'back' }); }
+    creating = !m;
+    roomId = m ? m[1] : code4();
+    const enter = () => {
+      history.replaceState(null, '', '#r-' + roomId);
       mq.subscribe([topic('state'), topic('patch')], { qos: 1 }, () => {
         if (gotState) return;
-        // không có ván nào được lưu cho phòng này: mình là người tạo phòng
-        setTimeout(() => {
+        // không có ván nào đang lưu cho phòng này: mình là người tạo phòng
+        clearTimeout(createTimer);
+        createTimer = setTimeout(() => {
           if (gotState) return;
-          gotState = true; online = true; synced = true;
+          gotState = true; online = true; synced = true; creating = false;
           claimIfFree();
           commit({ felt: prefs.felt });
           showInvite();
         }, 1500);
       });
+    };
+    retryRoom = () => { // mã vừa chọn đang có ván khác: đổi mã
+      mq.unsubscribe([topic('state'), topic('patch')]);
+      clearTimeout(createTimer); roomId = code4(); enter();
+    };
+    mq = mqtt.connect(BROKER, { clientId: 'bida8_' + rid() + rid(), clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 30 });
+    mq.on('connect', () => {
+      if (wasOffline) { wasOffline = false; popup({ kind: 'back' }); }
+      enter();
     });
     mq.on('message', (tp, buf) => {
       let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
       if (!msg || typeof msg !== 'object') return;
       if (tp.endsWith('/state') && msg.s) {
+        if (!gotState && creating) {
+          // tạo phòng mới: bỏ qua ván cũ đã bỏ (quá 6 tiếng), còn ván đang chơi thì đổi mã
+          if (msg.ts && Date.now() - msg.ts < 6 * 3600e3) retryRoom();
+          return;
+        }
         if (!gotState) {
           gotState = true; online = true; synced = false;
           applyRemote(normalize(msg.s));
@@ -792,6 +818,7 @@
     mq.on('error', e => console.warn('mqtt', e));
   }
   function showInvite() {
+    $('inviteCode').textContent = roomId;
     $('inviteLink').value = roomLink();
     $('copyBtn').textContent = navigator.share ? 'Gửi link' : 'Copy link';
     $('invite').hidden = false;
@@ -1193,8 +1220,7 @@
     power = Math.max(0, Math.min(1, p));
     const pct = Math.round(power * 100);
     const fill = $('pullFill');
-    fill.style[vert ? 'width' : 'height'] = pct + '%';
-    fill.style[vert ? 'height' : 'width'] = '';
+    fill.style.height = pct + '%';
     fill.classList.toggle('hot', pct >= 85);
     $('powerOut').textContent = pct;
     pull.setAttribute('aria-valuenow', pct);
@@ -1204,16 +1230,16 @@
   function layout() {
     vert = window.innerWidth < window.innerHeight && window.innerWidth < 900;
     const app = $('app');
-    app.classList.toggle('vert', vert);
+    app.classList.toggle('vert', false); // cột hai bên ở cả hai chiều màn hình
     const cs = getComputedStyle(app);
     const iw = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const ih = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    const w = Math.max(160, vert ? iw : iw - 2 * 46 - 2 * 6);
-    const h = Math.max(160, vert ? ih - 40 - 52 - 2 * 6 : ih);
+    const w = Math.max(120, iw - 2 * 46 - 2 * 6);
+    const h = Math.max(160, ih);
     canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
     renderer.setSize(w, h, false);
     fitCamera(w, h);
-    for (const c of document.querySelectorAll('.col')) c.style.height = vert ? '' : h + 'px';
+    for (const c of document.querySelectorAll('.col')) c.style.height = h + 'px';
     setPower(power);
   }
 
@@ -1264,12 +1290,12 @@
   pull.addEventListener('pointerdown', e => {
     if (!isAiming()) return;
     pull.setPointerCapture(e.pointerId);
-    pullStart = vert ? e.clientX : e.clientY; setPower(0); e.preventDefault();
+    pullStart = e.clientY; setPower(0); e.preventDefault();
   });
   pull.addEventListener('pointermove', e => {
     if (pullStart == null) return;
     const r = pull.getBoundingClientRect();
-    setPower(((vert ? e.clientX : e.clientY) - pullStart) / ((vert ? r.width : r.height) * 0.8));
+    setPower((e.clientY - pullStart) / (r.height * 0.8));
   });
   pull.addEventListener('pointerup', () => { if (pullStart == null) return; pullStart = null; shoot(); });
   pull.addEventListener('pointercancel', () => { pullStart = null; setPower(0); });
@@ -1279,13 +1305,13 @@
   let wheelPos = null, wheelOff = 0;
   wheel.addEventListener('pointerdown', e => {
     if (!isAiming()) return;
-    wheel.setPointerCapture(e.pointerId); wheelPos = vert ? e.clientX : e.clientY; e.preventDefault();
+    wheel.setPointerCapture(e.pointerId); wheelPos = e.clientY; e.preventDefault();
   });
   wheel.addEventListener('pointermove', e => {
     if (wheelPos == null) return;
-    const p = vert ? e.clientX : e.clientY, d = p - wheelPos; wheelPos = p;
+    const p = e.clientY, d = p - wheelPos; wheelPos = p;
     aim += d * 0.0025; wheelOff += d;
-    wheel.style.backgroundPosition = vert ? `${wheelOff}px 0` : `0 ${wheelOff}px`;
+    wheel.style.backgroundPosition = `0 ${wheelOff}px`;
   });
   ['pointerup', 'pointercancel'].forEach(t => wheel.addEventListener(t, () => { wheelPos = null; }));
   wheel.addEventListener('keydown', e => {
@@ -1379,6 +1405,15 @@
     swatch($('lbFelts'), FELTS, 'felt', 'felt');
     swatch($('lbCues'), CUES, 'cue', 'cue');
     $('lbGo').addEventListener('click', lobbyGo);
+    const join = () => {
+      const code = $('lbRoom').value.replace(/\D/g, '');
+      if (code.length !== 4) { $('lbErr').hidden = false; $('lbRoom').focus(); return; }
+      history.replaceState(null, '', '#r-' + code);
+      lobbyGo();
+    };
+    $('lbJoin').addEventListener('click', join);
+    $('lbRoom').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+    $('lbRoom').addEventListener('input', () => { $('lbErr').hidden = true; });
     $('lbName').addEventListener('keydown', e => { if (e.key === 'Enter') lobbyGo(); });
   }
   function openLobby(mode) {
@@ -1387,8 +1422,10 @@
     pressList($('lbBalls'), prefs.ball); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
     const canFelt = mode === 'start' ? !invited() : (!online || mySeat() === 0);
     $('lbFeltField').hidden = !canFelt;
+    $('lbRoomField').hidden = !(mode === 'start' && window.mqtt && !(window.claude && window.claude.use) && !invited());
+    $('lbErr').hidden = true;
     $('lbNote').textContent = mode === 'start' && invited() ? 'Bạn được mời vào một bàn. Màu bàn do người tạo phòng chọn.' : '';
-    $('lbGo').textContent = mode !== 'start' ? 'Xong' : invited() || (window.claude && window.claude.use) ? 'Vào bàn' : window.mqtt ? 'Tạo phòng' : 'Bắt đầu';
+    $('lbGo').textContent = mode !== 'start' ? 'Xong' : invited() || (window.claude && window.claude.use) ? 'Vào bàn' : window.mqtt ? 'Tạo phòng mới' : 'Bắt đầu';
     $('lobby').hidden = false;
   }
   function lobbyGo() {
