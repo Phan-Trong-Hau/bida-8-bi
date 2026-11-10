@@ -556,13 +556,13 @@
   Object.assign(sun.shadow.camera, { left: -640, right: 640, top: 400, bottom: -400, near: 100, far: 1600 });
   sun.shadow.bias = -0.0006;
   scene.add(sun);
-  const lamp = new THREE.PointLight(0xffffff, 0.45, 2200);
+  const lamp = new THREE.PointLight(0xffffff, 0.2, 2200);
   lamp.position.set(0, 520, 0);
   scene.add(lamp);
 
   const stdMat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, ...o });
-  const feltM = stdMat(0x0d5c45, { roughness: .95 }), cushionM = stdMat(0x09473a, { roughness: .9 });
-  const woodM = stdMat(0x4b1c12, { roughness: .28 }), woodDarkM = stdMat(0x26100a, { roughness: .5 });
+  const feltM = stdMat(0x0a4a37, { roughness: .95 }), cushionM = stdMat(0x073a2c, { roughness: .9 });
+  const woodM = stdMat(0x4b1c12, { roughness: .5 }), woodDarkM = stdMat(0x26100a, { roughness: .5 });
   const ivoryM = stdMat(0xd4af5f, { roughness: .3, metalness: .45 }), blackM = new THREE.MeshBasicMaterial({ color: 0x040404 });
 
   function box(x0, x1, z0, z1, y0, y1, m, shadow = true) {
