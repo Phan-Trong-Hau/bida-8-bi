@@ -285,7 +285,7 @@
 
   // ---------- Vật lý ----------
   // Miệng lỗ rộng rãi: bi chạm mép lỗ vẫn vào, không bật ra
-  const CORNER_M = 36, SIDE_M = 28;
+  const CORNER_M = 17, SIDE_M = 17;
   const inMouthX = x => x < CORNER_M || x > W - CORNER_M || Math.abs(x - W / 2) < SIDE_M;
   const inMouthY = y => y < CORNER_M || y > H - CORNER_M;
   function inPocket(b) {
@@ -574,11 +574,12 @@
   // mặt nỉ, băng, thành gỗ, thân bàn
   box(-CU, W + CU, -CU, H + CU, -4, 0, feltM, false);
   for (const [z0, z1] of [[-CU, 0], [H, H + CU]]) {
-    box(CORNER_M, W / 2 - SIDE_M, z0, z1, 0, CUSH_H, cushionM);
-    box(W / 2 + SIDE_M, W - CORNER_M, z0, z1, 0, CUSH_H, cushionM);
+    // băng kéo sát vào lỗ (phần thừa bị lỗ đen che)
+    box(13, W / 2 - 16, z0, z1, 0, CUSH_H, cushionM);
+    box(W / 2 + 16, W - 13, z0, z1, 0, CUSH_H, cushionM);
   }
-  box(-CU, 0, CORNER_M, H - CORNER_M, 0, CUSH_H, cushionM);
-  box(W, W + CU, CORNER_M, H - CORNER_M, 0, CUSH_H, cushionM);
+  box(-CU, 0, 13, H - 13, 0, CUSH_H, cushionM);
+  box(W, W + CU, 13, H - 13, 0, CUSH_H, cushionM);
   const E = CU + RW;
   box(-E, W + E, -E, -CU, 0, RAIL_H, woodM);
   box(-E, W + E, H + CU, H + E, 0, RAIL_H, woodM);
@@ -589,8 +590,6 @@
   for (const p of POCKETS) {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, RAIL_H + 1, 32), blackM);
     m.position.copy(T(p.x, p.y, (RAIL_H + 1) / 2 - 0.5)); scene.add(m);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(p.r + 1, 1.6, 8, 40), ivoryM);
-    rim.rotation.x = Math.PI / 2; rim.position.copy(T(p.x, p.y, RAIL_H + .6)); scene.add(rim);
   }
   // diamond trên thành bàn, điểm chân bàn
   const dotGeo = new THREE.CircleGeometry(3.2, 12);
