@@ -399,7 +399,7 @@
   const vary = () => .94 + Math.random() * .12;
   const sfx = {
     click(v) { const a = Math.min(1, v / 14); if (a < .03 || !canPlay()) return; play(bufs.click[Math.floor(Math.random() * 3)], .9 * Math.pow(a, .8), vary()); },
-    cushion(v) { const a = Math.min(1, v / 18); if (a < .06 || !canPlay()) return; play(bufs.cushion, .38 * a, vary()); },
+    cushion(v) { const a = Math.min(1, v / 18); if (a < .06 || !canPlay()) return; play(bufs.cushion, .2 * a, vary()); },
     pocket() { if (!canPlay()) return; play(bufs.pocket, .85, vary()); },
     cue(p) { if (!canPlay()) return; play(bufs.cue, .45 + .5 * p, vary()); },
   };
