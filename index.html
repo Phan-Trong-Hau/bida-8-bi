@@ -236,6 +236,9 @@
     80% { transform: translateX(2px); }
   }
   #over:not([hidden]) #winAv { animation: winBounce 1s ease-in-out infinite; }
+  #over.lose .card { border-color: var(--line); }
+  #over.lose h2 { color: var(--chalk); }
+  #over.lose #winAv { animation: none; opacity: .8; }
   @keyframes winBounce {
     0%, 100% { transform: translateY(0); box-shadow: 0 0 0 3px rgba(216,169,79,.5); }
     50% { transform: translateY(-8px); box-shadow: 0 0 0 6px rgba(216,169,79,.8), 0 0 22px rgba(255,210,120,.7); }
@@ -1349,11 +1352,27 @@
     });
     if (!fxRun) { fxRun = true; requestAnimationFrame(fxLoop); }
   }
+  // mưa rơi nhẹ cho người thua
+  function rain(count) {
+    if (reduceMotion) return;
+    const k = Math.min(window.devicePixelRatio || 1, 2), w = fxc.clientWidth, h = fxc.clientHeight;
+    if (fxc.width !== Math.round(w * k)) { fxc.width = Math.round(w * k); fxc.height = Math.round(h * k); }
+    for (let i = 0; i < count; i++) parts.push({
+      drop: true, x: Math.random() * w, y: -20 - Math.random() * h * .8, vx: -.3, vy: 3 + Math.random() * 2,
+      a: 0, va: 0, c: i % 3 ? 'rgba(132,198,232,.55)' : 'rgba(151,161,168,.5)', s: 10 + Math.random() * 8,
+    });
+    if (!fxRun) { fxRun = true; requestAnimationFrame(fxLoop); }
+  }
   function fxLoop() {
     const k = fxc.width / (fxc.clientWidth || 1), h = fxc.clientHeight;
     fxx.setTransform(k, 0, 0, k, 0, 0); fxx.clearRect(0, 0, fxc.clientWidth, h);
     parts = parts.filter(p => p.y < h + 30);
     for (const p of parts) {
+      if (p.drop) {
+        p.x += p.vx; p.y += p.vy;
+        fxx.strokeStyle = p.c; fxx.lineWidth = 1.6; fxx.beginPath(); fxx.moveTo(p.x, p.y); fxx.lineTo(p.x - .6, p.y + p.s); fxx.stroke();
+        continue;
+      }
       p.vy += .22; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.a += p.va;
       fxx.save(); fxx.translate(p.x, p.y); fxx.rotate(p.a); fxx.fillStyle = p.c;
       fxx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2 * (.4 + .6 * Math.abs(Math.cos(p.a * 2)))); fxx.restore();
@@ -1371,7 +1390,11 @@
   }
   $('flair').addEventListener('animationend', () => { $('flair').hidden = true; });
   function celebrate(ev) {
-    if (ev.kind === 'win') { confetti(160); setTimeout(() => confetti(110, .2), 500); setTimeout(() => confetti(90, .3), 1100); return; }
+    if (ev.kind === 'win') {
+      const me = mySeat();
+      if (online && me >= 0 && ev.who !== me) { rain(70); return; } // người thua: không chúc mừng
+      confetti(160); setTimeout(() => confetti(110, .2), 500); setTimeout(() => confetti(90, .3), 1100); return;
+    }
     const fx = ev.fx; if (!fx || ev.kind === 'timeout') { if (ev.kind === 'foul' || ev.kind === 'timeout') shake(); return; }
     const by = cap(whoName(fx.by));
     if (fx.combo >= 3) { flair('Quá đỉnh! Ăn ' + fx.combo + ' bi'); confetti(110); }
@@ -1478,11 +1501,13 @@
     $('over').hidden = S.phase !== 'over';
     if (S.phase === 'over') {
       paintAvatar($('winAv'), S.winner);
-      $('winTitle').textContent = cap(whoName(S.winner)) + ' thắng';
+      const meS = mySeat(), lost = online && meS >= 0 && S.winner !== meS;
+      $('over').classList.toggle('lose', lost);
+      $('winTitle').textContent = lost ? 'Bạn thua' : cap(whoName(S.winner)) + ' thắng';
       const loser = cap(whoName(1 - S.winner));
-      $('winReason').textContent = S.reason === 'clean' ? cap(whoName(S.winner)) + ' đưa bi 8 vào lỗ đúng luật'
+      $('winReason').textContent = (lost ? cap(whoName(S.winner)) + ' thắng · ' : '') + (S.reason === 'clean' ? cap(whoName(S.winner)) + ' đưa bi 8 vào lỗ đúng luật'
         : S.reason === 'early' ? loser + ' đưa bi 8 vào lỗ quá sớm'
-        : S.reason === 'foul8' ? loser + ' đánh lỗi khi bi 8 rơi xuống lỗ' : '';
+        : S.reason === 'foul8' ? loser + ' đánh lỗi khi bi 8 rơi xuống lỗ' : '');
       const btn = $('againBtn');
       btn.textContent = myVote ? 'Đang chờ…' : otherVote ? 'Đồng ý ván mới' : 'Ván mới';
       btn.hidden = online && me < 0;
