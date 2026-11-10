@@ -17,6 +17,14 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 
 Khi mở game sẽ có trang sảnh để nhập **tên**, chọn **avatar** (tải ảnh của bạn lên, hoặc chọn 1 trong 12 con vật hay 15 viên bi), **màu bàn** (navy, xanh lục bảo, đỏ rượu vang, xám than; do người tạo phòng chọn) và **gậy** (gỗ phong, đen carbon, đỏ ruby, vàng đồng, xanh sapphire, trắng ngà; có khung xem trước 3D). Tên và avatar được gửi sang máy bên kia. Trong ván bấm ⚙ để đổi lại. Lựa chọn được nhớ trên máy cho lần sau.
 
+## Thêm
+
+- **Cài như app (PWA):** trên Android/Chrome bấm “Cài lên màn hình chính” trong sảnh; trên iPhone mở bằng Safari → Chia sẻ → “Thêm vào MH chính”. App mở toàn màn hình, nằm ngang, luôn lấy bản mới nhất (có bản dự phòng khi mất mạng, chơi với máy được cả khi offline).
+- **Thả biểu cảm:** nút 😀 ở cột phải, chọn 😂 👏 😱 😤 🔥 👍 😭 😎. Biểu cảm bay lên trên màn hình cả hai người.
+- **Chơi với máy:** trong sảnh chọn 🤖 Dễ / Vừa / Khó. Máy tự tìm cú đánh (bóng ma, góc cắt, đường đi thoáng), tự đặt bi trắng khi được đặt, và thỉnh thoảng thả biểu cảm trêu.
+- **Âm thanh không khí:** tiếng khán giả reo khi bạn thắng, tiếng “ding” khi tới lượt bạn.
+- **Đường ngắm dài:** đường bi trắng bật băng tối đa 2 lần, đường đi của bi bị đánh và của bi trắng sau va chạm kéo tới băng. Có thể chuyển về đường ngắm ngắn trong sảnh.
+
 ## Thời gian & lịch sử
 
 - **Thời gian mỗi lượt** (người tạo phòng chọn): không giới hạn, 15 giây, 30 giây, 1, 2, 3 hoặc 5 phút. Đồng hồ đếm ngược hiện dưới avatar người tới lượt, chỉ chạy khi đủ hai người. Hết giờ thì mất lượt, đối thủ được đặt bi trắng.
