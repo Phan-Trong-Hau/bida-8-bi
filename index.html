@@ -314,7 +314,7 @@
       actx = new AC();
       master = actx.createDynamicsCompressor();
       master.threshold.value = -14; master.ratio.value = 6;
-      const warm = actx.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 2400; warm.Q.value = .5;
+      const warm = actx.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 2800; warm.Q.value = .5;
       master.connect(warm); warm.connect(actx.destination);
       buildSounds();
     }
@@ -361,18 +361,19 @@
     }
   }
   function buildSounds() {
-    // Tông gỗ trầm ấm: cộng hưởng 80–1700 Hz, không có tiếng tách tần số cao
+    // Pha gỗ và chắc: thân trầm đặc 170–470 Hz, gỗ ngân rất ngắn, không có tiếng tách cao
     bufs = {
       click: [0, 1, 2].map(v => {
         const j = 1 + (v - 1) * .08;
         return mkBuf(.12, (d, sr) => {
-          burst(d, sr, .003, 1400, 0, .5);
-          modes(d, sr, [[620 * j, 1, .02], [1040 * j, .55, .013], [1680 * j, .25, .008], [310 * j, .35, .025]]);
+          // va chắc + thân trầm đặc + chút gỗ ngân ngắn
+          burst(d, sr, .0018, 1900, 0, .7);
+          modes(d, sr, [[210 * j, .95, .02], [470 * j, .6, .011], [880 * j, .45, .007], [1450 * j, .22, .004]]);
         });
       }),
       cue: mkBuf(.12, (d, sr) => {
-        burst(d, sr, .004, 900, 0, .8);
-        modes(d, sr, [[240, .8, .032], [520, .5, .02], [880, .28, .012]]);
+        burst(d, sr, .003, 1300, 0, .8);
+        modes(d, sr, [[170, .95, .026], [390, .5, .012], [760, .25, .006]]);
       }),
       cushion: mkBuf(.18, (d, sr) => {
         burst(d, sr, .03, 240);
