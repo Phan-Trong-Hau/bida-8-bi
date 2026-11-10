@@ -9,7 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Be+Vietnam+Pro:wght@400;500;600&display=swap">
 <style>
-  /* Layout: mobile-first — thanh người chơi gọn ở trên, bàn (đứng trên điện thoại dọc) cạnh thanh kéo lực, nút ngắm tinh ở dưới */
+  /* Layout: bàn chiếm tối đa màn hình. Ngang: cột trái (xếp lại, người 1, lực) · bàn · cột phải (người 2, xoay gậy).
+     Dọc: hàng trên (xếp lại, 2 avatar) · bàn · hàng dưới (lực, xoay gậy). */
   :root {
     --room: #121619;
     --panel: #1a2026;
@@ -23,133 +24,155 @@
     --body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
     color-scheme: dark;
   }
+  html { height: 100%; box-sizing: border-box; }
   html, body { background: var(--room); color: var(--ink); }
-  body { font-family: var(--body); font-size: 14px; line-height: 1.45; -webkit-tap-highlight-color: transparent; }
+  body { height: 100%; overflow: hidden; overscroll-behavior: none; font-family: var(--body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
   .app {
-    max-width: 1240px; margin: 0 auto;
+    box-sizing: border-box; height: 100%;
     padding-block: 6px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    display: grid; gap: 6px;
+    display: flex; justify-content: center; align-items: center; gap: 6px;
   }
-  .bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .who { display: flex; align-items: center; gap: 4px; flex: none; }
-  .who.right { flex-direction: row-reverse; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 46px; flex: none; }
+
+  .app.vert {
+    display: grid; grid-template-columns: 34px 1fr 1fr; align-content: center; justify-content: stretch;
+    grid-template-areas: "reset who0 who1" "table table table" "pull pull wheel";
+  }
+  .vert .col { display: contents; }
+  .vert #resetBtn { grid-area: reset; }
+  .vert #who0 { grid-area: who0; flex-direction: row; justify-self: start; }
+  .vert #who1 { grid-area: who1; flex-direction: row-reverse; justify-self: end; }
+  .vert .table-wrap { grid-area: table; justify-self: center; }
+  .vert .pull { grid-area: pull; height: 52px; width: auto; }
+  .vert .wheel { grid-area: wheel; height: 52px; width: auto; }
+
+  .who { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .avatar {
-    position: relative; width: 34px; height: 34px; border-radius: 50%; flex: none;
-    display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 18px;
+    width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex: none;
+    display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 20px;
     background: var(--panel); border: 2px solid var(--line); color: var(--muted);
-    transition: border-color .2s, color .2s;
+    transition: border-color .2s, box-shadow .2s;
   }
-  .who.active .avatar { border-color: var(--brass); color: var(--brass); box-shadow: 0 0 0 3px rgba(216,169,79,.25); }
-  .avatar .wins {
-    position: absolute; right: -4px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
-    background: var(--brass); color: #1b1408; font-family: var(--body); font-size: 10px; font-weight: 600; line-height: 16px; text-align: center;
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .who.active .avatar { border-color: var(--brass); color: var(--brass); box-shadow: 0 0 0 3px rgba(216,169,79,.3); }
+  .who.empty .avatar { border-style: dashed; }
+  .who.mine::after {
+    content: ""; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--chalk); border: 2px solid var(--room);
   }
-  .rack { display: grid; grid-template-columns: repeat(4, 10px); gap: 2px; min-width: 46px; }
-  .who.right .rack { direction: rtl; }
+  .wins {
+    position: absolute; top: 24px; left: 26px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
+    background: var(--brass); color: #1b1408; font-size: 10px; font-weight: 600; line-height: 16px; text-align: center;
+  }
+  .vert #who1 .wins { left: auto; right: 26px; }
+  .rack { display: grid; grid-template-columns: repeat(3, 10px); gap: 2px; justify-content: center; }
+  .vert .rack { grid-template-columns: repeat(4, 10px); }
   .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset -1px -1px 2px rgba(0,0,0,.35); }
   .dot.gone { opacity: .18; }
-  .status { flex: 1; min-width: 0; margin: 0; text-align: center; font-size: 12px; line-height: 1.3; font-weight: 500; }
-  .status.foul { color: #f3c3b8; }
 
-  .stage { display: flex; justify-content: center; align-items: stretch; gap: 6px; }
-  .pull { order: -1; }
   .table-wrap { position: relative; flex: none; }
   canvas { display: block; touch-action: none; border-radius: 12px; cursor: crosshair; max-width: 100%; }
 
-  .pull {
-    position: relative; flex: none; width: 46px; border-radius: 12px; overflow: hidden;
-    background:
-      repeating-linear-gradient(to bottom, transparent 0 calc(10% - 1px), rgba(255,255,255,.08) calc(10% - 1px) 10%),
-      var(--panel);
-    border: 1px solid var(--line); touch-action: none; cursor: ns-resize; user-select: none;
+  .pull, .wheel {
+    position: relative; width: 100%; flex: 1; min-height: 60px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--line); touch-action: none; user-select: none;
   }
-  .pull:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
-  .pull.off { opacity: .4; cursor: not-allowed; }
-  .pull-fill {
-    position: absolute; inset: 0 0 auto 0; height: 0%;
-    background: linear-gradient(to bottom, #8a6526, var(--brass) 70%, #f1d08a);
-  }
+  .pull { background: repeating-linear-gradient(to bottom, transparent 0 calc(10% - 1px), rgba(255,255,255,.08) calc(10% - 1px) 10%), var(--panel); cursor: ns-resize; }
+  .vert .pull { background: repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), rgba(255,255,255,.08) calc(10% - 1px) 10%), var(--panel); cursor: ew-resize; min-height: 0; }
+  .pull-fill { position: absolute; inset: 0 0 auto 0; height: 0%; background: linear-gradient(to bottom, #8a6526, var(--brass) 70%, #f1d08a); }
+  .vert .pull-fill { inset: 0 auto 0 0; height: auto; width: 0%; background: linear-gradient(to right, #8a6526, var(--brass) 70%, #f1d08a); }
   .pull-fill.hot { background: linear-gradient(to bottom, #8a6526, var(--brass) 50%, var(--foul)); }
-  .pull-label {
-    position: absolute; inset: auto 0 8px 0; display: grid; justify-items: center; gap: 2px; pointer-events: none;
-    font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2;
+  .vert .pull-fill.hot { background: linear-gradient(to right, #8a6526, var(--brass) 50%, var(--foul)); }
+  .pull-num {
+    position: absolute; inset: auto 0 8px 0; text-align: center; pointer-events: none;
+    font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums;
   }
-  .pull-label b { font-family: var(--display); font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .pull-arrow { position: absolute; top: 8px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 18px; pointer-events: none; }
-
-  .side { display: flex; flex-direction: column; gap: 6px; flex: none; width: 46px; }
-  .wheel {
-    position: relative; flex: 1; border-radius: 12px; border: 1px solid var(--line);
-    background: repeating-linear-gradient(to bottom, var(--panel) 0 7px, var(--line) 7px 9px);
-    touch-action: none; cursor: ns-resize; user-select: none;
-  }
-  .wheel.off { opacity: .4; cursor: not-allowed; }
-  .wheel:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+  .vert .pull-num { inset: 0 12px 0 auto; display: grid; place-items: center; }
+  .wheel { background: repeating-linear-gradient(to bottom, var(--panel) 0 7px, var(--line) 7px 9px); cursor: ns-resize; }
+  .vert .wheel { background: repeating-linear-gradient(to right, var(--panel) 0 7px, var(--line) 7px 9px); cursor: ew-resize; min-height: 0; }
   .wheel-icon {
-    position: absolute; inset: 0; padding: 6px 0; pointer-events: none;
-    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
-    color: var(--muted); font-size: 18px;
+    position: absolute; inset: 0; padding: 6px; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center; color: var(--muted); font-size: 18px;
   }
+  .vert .wheel-icon { flex-direction: row; }
   .wheel-icon span { background: var(--panel); border-radius: 50%; width: 26px; height: 26px; display: grid; place-items: center; }
-  .reset { flex: none; width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); }
+  .pull.off, .wheel.off { opacity: .35; cursor: not-allowed; }
+  .pull:focus-visible, .wheel:focus-visible, button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+
   button {
-    font: inherit; font-weight: 600; border-radius: 8px; padding: 9px 14px; cursor: pointer; min-height: 42px;
+    font: inherit; font-weight: 600; border-radius: 8px; padding: 8px 16px; cursor: pointer; min-height: 40px;
     border: 1px solid var(--line); background: var(--panel); color: var(--ink); touch-action: manipulation;
   }
-  button.icon { min-width: 48px; font-size: 18px; padding: 6px 10px; }
-  button:hover { border-color: var(--muted); }
-  button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
   button.primary { background: var(--brass); color: #1b1408; border-color: var(--brass); }
+  .reset { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); flex: none; }
+  .reset.waiting { color: var(--brass); border-color: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(216,169,79,.25); } }
 
-  .overlay { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 12px; background: rgba(10, 13, 16, .74); }
+  .toast {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; align-items: center; gap: 10px; white-space: nowrap; pointer-events: none;
+    padding: 10px 20px; border-radius: 14px; background: rgba(18,22,25,.9); border: 1px solid var(--brass);
+    font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: .02em;
+  }
+  .toast.foul { border-color: var(--foul); color: #f6c9be; }
+  .toast.show { animation: toast 1.8s ease forwards; }
+  @keyframes toast {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
+    12%, 78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+  .modal { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 12px; background: rgba(10,13,16,.74); }
   .card {
-    background: var(--panel); border: 1px solid var(--brass); border-radius: 12px; padding: 18px 20px;
-    text-align: center; display: grid; gap: 10px; max-width: 86%;
+    background: var(--panel); border: 1px solid var(--brass); border-radius: 12px; padding: 16px 20px;
+    text-align: center; display: grid; gap: 10px; justify-items: center; max-width: 86%;
   }
-  .card h2 { margin: 0; font-family: var(--display); font-size: 30px; text-transform: uppercase; letter-spacing: .04em; color: var(--brass); }
-  .card p { margin: 0; color: var(--muted); }
+  .card h2 { margin: 0; font-family: var(--display); font-size: 28px; text-transform: uppercase; letter-spacing: .04em; color: var(--brass); }
+  .card .row { display: flex; gap: 10px; }
+  .card .avatar { width: 46px; height: 46px; }
 
-  @media (min-width: 900px) and (min-height: 600px) {
-    .app { gap: 10px; padding-block: 12px; }
-    .avatar { width: 42px; height: 42px; font-size: 22px; }
-    .rack { grid-template-columns: repeat(4, 14px); min-width: 62px; }
-    .dot { width: 14px; height: 14px; }
-    .status { font-size: 14px; }
+  @media (prefers-reduced-motion: reduce) {
+    .avatar { transition: none; }
+    .reset.waiting { animation: none; }
+    .toast.show { animation-name: toastFade; }
+    @keyframes toastFade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
   }
-  @media (prefers-reduced-motion: reduce) { .avatar { transition: none; } }
 </style>
 
 <div class="app" id="app">
-  <section class="bar" aria-label="Người chơi">
-    <button class="reset" id="newBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
-    <div class="who" id="p0"><div class="avatar" title="Người 1">1<span class="wins" id="wins0">0</span></div><div class="rack" id="rack0"></div></div>
-    <p class="status" id="status" role="status"></p>
-    <div class="who right" id="p1"><div class="avatar" title="Người 2">2<span class="wins" id="wins1">0</span></div><div class="rack" id="rack1"></div></div>
-  </section>
-
-  <div class="stage" id="stage">
-    <div class="table-wrap" id="tableWrap">
-      <canvas id="table" aria-label="Bàn bida — chạm để ngắm"></canvas>
-      <div class="overlay" id="overlay" hidden>
-        <div class="card">
-          <h2 id="winTitle"></h2>
-          <p id="winReason"></p>
-          <div><button class="primary" id="againBtn">Ván mới</button></div>
-        </div>
-      </div>
-    </div>
-    <div class="pull" id="pull" role="slider" tabindex="0" aria-label="Lực đánh — kéo xuống rồi thả để đánh"
-         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <div class="col" id="colL">
+    <button class="reset" id="resetBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
+    <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><div class="rack" id="rack0"></div></div>
+    <div class="pull" id="pull" role="slider" tabindex="0" aria-label="Lực đánh — kéo rồi thả để đánh" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="pull-fill" id="pullFill"></div>
-      <div class="pull-arrow" aria-hidden="true">⇣</div>
-      <div class="pull-label"><b id="powerOut">0%</b></div>
+      <div class="pull-num" id="powerOut">0</div>
     </div>
-    <div class="side" id="side">
-      <div class="wheel" id="wheel" role="slider" tabindex="0" aria-label="Xoay gậy — kéo lên hoặc xuống">
-        <div class="wheel-icon" aria-hidden="true"><span>↺</span><span>↻</span></div>
+  </div>
+
+  <div class="table-wrap" id="tableWrap">
+    <canvas id="table" aria-label="Bàn bida"></canvas>
+    <div class="toast" id="toast" hidden></div>
+    <div class="modal" id="ask" hidden>
+      <div class="card">
+        <div class="avatar" id="askAv"></div>
+        <h2>Xếp lại bàn?</h2>
+        <div class="row"><button id="noBtn" aria-label="Không đồng ý">✕</button><button class="primary" id="yesBtn" aria-label="Đồng ý">✓</button></div>
       </div>
+    </div>
+    <div class="modal" id="over" hidden>
+      <div class="card">
+        <div class="avatar" id="winAv"></div>
+        <h2 id="winTitle"></h2>
+        <button class="primary" id="againBtn">Ván mới</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col" id="colR">
+    <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><div class="rack" id="rack1"></div></div>
+    <div class="wheel" id="wheel" role="slider" tabindex="0" aria-label="Xoay gậy — kéo để xoay">
+      <div class="wheel-icon" aria-hidden="true"><span>↺</span><span>↻</span></div>
     </div>
   </div>
 </div>
@@ -169,62 +192,95 @@
 
   const $ = id => document.getElementById(id);
   const canvas = $('table'), ctx = canvas.getContext('2d');
-  const pull = $('pull');
-  let dpr = 1, vert = false, LW = CW, LH = CH; // LW/LH: kích thước canvas theo hướng hiển thị
+  const pull = $('pull'), wheel = $('wheel');
+  const rid = () => Math.random().toString(36).slice(2, 10);
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  let dpr = 1, vert = false, LW = CW, LH = CH;
 
-  const store = {
-    get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
-  };
-
-  const players = [
-    { name: 'Người 1', wins: 0, group: null },
-    { name: 'Người 2', wins: 0, group: null },
-  ];
-  let balls = [], cur = 0, breaker = 0, state = 'aim', aim = 0, power = 0;
-  let shot = null, isBreak = true, hover = null, msg = '', msgFoul = false;
-  let tablePull = null; // kéo lực bằng chuột trên bàn
+  // ---------- Trạng thái ----------
+  // S: trạng thái chung (đồng bộ giữa 2 máy). balls: bản mô phỏng cục bộ có vận tốc.
+  let synced = false, online = false, mainRef = null, lockRef = null, userCap = null, myId = null, canWrite = null;
+  const profiles = {};
+  let S, balls = [], aim = 0, power = 0, hover = null;
+  let sim = null, shotRec = null, lastShotId = null, pendingEvent = null, fallbackTimer = null, authAt = 0;
+  let writeQ = Promise.resolve();
 
   const groupOf = n => n === 8 ? 'eight' : n < 8 ? 'solid' : 'stripe';
-  const groupName = g => g === 'solid' ? 'bi trơn (1–7)' : g === 'stripe' ? 'bi sọc (9–15)' : 'bi 8';
   const nums = g => g === 'solid' ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
   const onTable = n => balls.some(b => b.n === n && b.on);
   const remaining = g => nums(g).filter(onTable).length;
-  const cue = () => balls[0];
 
-  // ---------- Kích thước & hướng bàn ----------
-  function layout() {
-    vert = window.innerWidth < window.innerHeight && window.innerWidth < 900;
-    LW = vert ? CH : CW; LH = vert ? CW : CH;
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(LW * dpr); canvas.height = Math.round(LH * dpr);
-    const stage = $('stage');
-    const pullW = pull.getBoundingClientRect().width || 46;
-    const sideW = ($('side').getBoundingClientRect().width || 46) + 6;
-    const availW = stage.clientWidth - pullW - 6 - sideW;
-    const top = stage.getBoundingClientRect().top + window.scrollY;
-    const below = 8;
-    const availH = Math.max(200, window.innerHeight - top - below);
-    const ratio = LW / LH;
-    const w = Math.max(160, Math.min(availW, availH * ratio));
-    canvas.style.width = w + 'px'; canvas.style.height = (w / ratio) + 'px';
-    canvas.setAttribute('aria-label', vert ? 'Bàn bida (đứng) — chạm để ngắm' : 'Bàn bida — chạm để ngắm');
-  }
-
-  function newGame() {
-    balls = [{ n: 0, x: HEAD.x, y: HEAD.y, vx: 0, vy: 0, on: true }];
+  function rackBalls() {
+    const out = [{ n: 0, x: HEAD.x, y: HEAD.y, on: true }];
     const rows = [[1], [9, 2], [10, 8, 3], [11, 4, 12, 5], [6, 13, 14, 7, 15]];
     const dx = R * Math.sqrt(3) + 0.3;
-    rows.forEach((row, i) => row.forEach((n, j) => balls.push({
-      n, x: FOOT.x + i * dx, y: FOOT.y + (j - (row.length - 1) / 2) * (2 * R + 0.3), vx: 0, vy: 0, on: true,
+    rows.forEach((row, i) => row.forEach((n, j) => out.push({
+      n, x: +(FOOT.x + i * dx).toFixed(2), y: +(FOOT.y + (j - (row.length - 1) / 2) * (2 * R + 0.3)).toFixed(2), on: true,
     })));
-    players.forEach(p => p.group = null);
-    cur = breaker; state = 'aim'; isBreak = true; aim = 0; shot = null; setPower(0);
-    $('overlay').hidden = true;
-    say(`${players[cur].name} phá bi. Bàn đang mở.`);
+    return out;
   }
 
-  function say(text, foul = false) { msg = text; msgFoul = foul; renderUI(); }
+  function freshState(prev) {
+    const b = prev ? prev.breaker : 0;
+    return {
+      v: 1, balls: rackBalls(), cur: b, breaker: b,
+      groups: { p0: null, p1: null }, wins: prev ? { ...prev.wins } : { p0: 0, p1: 0 },
+      isBreak: true, phase: 'aim', winner: -1, reason: '',
+      event: { id: rid(), kind: 'start', who: b }, shot: null,
+      seats: prev ? { ...prev.seats } : { p0: null, p1: null },
+      reset: { p0: false, p1: false }, seq: (prev ? prev.seq : 0) + 1,
+    };
+  }
+
+  function normalize(d) {
+    const base = freshState(null);
+    return {
+      ...base, ...d,
+      seats: { ...base.seats, ...(d.seats || {}) }, reset: { ...base.reset, ...(d.reset || {}) },
+      groups: { ...base.groups, ...(d.groups || {}) }, wins: { ...base.wins, ...(d.wins || {}) },
+      event: d.event || { id: '', kind: 'start', who: 0 },
+    };
+  }
+
+  const loadBalls = arr => { balls = arr.map(b => ({ n: b.n, x: b.x, y: b.y, on: !!b.on, vx: 0, vy: 0 })); };
+  const serialBalls = () => balls.map(b => ({ n: b.n, x: +b.x.toFixed(2), y: +b.y.toFixed(2), on: b.on }));
+
+  const mySeat = () => !online ? -1 : S.seats.p0 === myId ? 0 : S.seats.p1 === myId ? 1 : -1;
+  function canAct() {
+    if (!online) return true;
+    if (mySeat() < 0) return false;
+    const owner = S.seats['p' + S.cur];
+    return !owner || owner === myId;
+  }
+  const isAiming = () => S.phase === 'aim' && !sim && canAct();
+  const isPlacing = () => S.phase === 'place' && !sim && canAct();
+
+  function merge(s, p) {
+    const o = { ...s };
+    for (const k in p) {
+      if (['seats', 'reset', 'groups', 'wins'].includes(k) && p[k] && typeof p[k] === 'object') o[k] = { ...s[k], ...p[k] };
+      else o[k] = p[k];
+    }
+    return o;
+  }
+
+  function commit(patch) {
+    const prev = S;
+    S = merge(S, patch);
+    if ('balls' in patch && !sim) loadBalls(S.balls);
+    afterState(prev);
+    if (online && mainRef) {
+      const p = JSON.parse(JSON.stringify(patch));
+      writeQ = writeQ.then(() => mainRef.update(p)).catch(e => console.warn('db write', e));
+    }
+  }
+
+  function afterState(prev) {
+    if (prev && S.event.id !== prev.event.id) {
+      if (sim) pendingEvent = S.event; else popup(S.event);
+    }
+    renderUI();
+  }
 
   // ---------- Vật lý ----------
   const inMouthX = x => x < 26 || x > W - 26 || Math.abs(x - W / 2) < 22;
@@ -232,7 +288,7 @@
 
   function pot(b) {
     b.on = false; b.vx = b.vy = 0;
-    if (b.n === 0) shot.scratch = true; else shot.potted.push(b.n);
+    if (b.n === 0) shotRec.scratch = true; else shotRec.potted.push(b.n);
   }
 
   function step(dt) {
@@ -248,8 +304,8 @@
       if (dvn <= 0) continue;
       const imp = dvn * (1 + 0.95) / 2;
       a.vx -= imp * nx; a.vy -= imp * ny; b.vx += imp * nx; b.vy += imp * ny;
-      if (shot && shot.firstHit == null) {
-        if (a.n === 0) shot.firstHit = b.n; else if (b.n === 0) shot.firstHit = a.n;
+      if (shotRec.firstHit == null) {
+        if (a.n === 0) shotRec.firstHit = b.n; else if (b.n === 0) shotRec.firstHit = a.n;
       }
     }
     for (const b of act) {
@@ -267,34 +323,37 @@
       }
     }
   }
-
   const moving = () => balls.some(b => b.on && (b.vx || b.vy));
+
+  function free(x, y, self) {
+    if (x < R || x > W - R || y < R || y > H - R) return false;
+    return balls.every(b => b === self || !b.on || Math.hypot(b.x - x, b.y - y) >= 2 * R + 0.5);
+  }
 
   // ---------- Luật ----------
   function legalTarget(n) {
-    const g = players[cur].group;
+    const g = S.groups['p' + S.cur];
     if (!g) return n !== 8;
     return remaining(g) === 0 ? n === 8 : groupOf(n) === g;
   }
 
-  function setPower(p) {
-    power = Math.max(0, Math.min(1, p));
-    const pct = Math.round(power * 100);
-    $('pullFill').style.height = pct + '%';
-    $('pullFill').classList.toggle('hot', pct >= 85);
-    $('powerOut').textContent = pct + '%';
-    pull.setAttribute('aria-valuenow', pct);
+  function startSim(shot, mine) {
+    loadBalls(shot.balls);
+    const c = balls[0];
+    c.vx = Math.cos(shot.aim) * shot.power * MAXV; c.vy = Math.sin(shot.aim) * shot.power * MAXV;
+    const g = S.groups['p' + S.cur];
+    shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false };
+    sim = { id: shot.id, mine };
+    lastShotId = shot.id;
+    clearTimeout(fallbackTimer);
   }
 
   function shoot() {
-    if (state !== 'aim') return;
+    if (!isAiming()) return;
     if (power < MIN_POWER) { setPower(0); return; }
-    const c = cue();
-    c.vx = Math.cos(aim) * power * MAXV; c.vy = Math.sin(aim) * power * MAXV;
-    const g = players[cur].group;
-    shot = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false };
-    state = 'moving';
-    say(`${players[cur].name} đánh với lực ${Math.round(power * 100)}%…`);
+    const shot = { id: rid(), aim, power, balls: serialBalls(), by: myId || '' };
+    startSim(shot, true);
+    commit({ phase: 'moving', shot, seq: S.seq + 1 });
     setPower(0);
   }
 
@@ -304,64 +363,170 @@
     while (!free(b.x, b.y, b) && b.x < W - R) b.x += 2 * R + 1;
   }
 
-  function endShot() {
-    const P = players[cur], O = players[1 - cur], s = shot, g = P.group;
-    let foul = null;
-    if (s.scratch) foul = 'bi cái rơi xuống lỗ';
-    else if (s.firstHit == null) foul = 'bi cái không chạm bi nào';
-    else if (g) {
-      const target = s.cleared ? 'eight' : g;
-      if (groupOf(s.firstHit) !== target) foul = target === 'eight' ? 'phải chạm bi 8 trước' : `chạm ${groupName(groupOf(s.firstHit))} trước`;
-    } else if (s.firstHit === 8 && !isBreak) foul = 'chạm bi 8 trước khi có nhóm';
+  function computeEnd() {
+    const P = S.cur, s = shotRec, g = S.groups['p' + P];
+    let foul = false;
+    if (s.scratch || s.firstHit == null) foul = true;
+    else if (g) foul = groupOf(s.firstHit) !== (s.cleared ? 'eight' : g);
+    else if (s.firstHit === 8 && !S.isBreak) foul = true;
 
-    let note = '';
+    const base = { isBreak: false, shot: null, seq: S.seq + 1 };
     if (s.potted.includes(8)) {
-      if (isBreak) { respot8(); s.potted = s.potted.filter(n => n !== 8); note = 'Bi 8 vào lỗ khi phá nên được đặt lại. '; }
-      else if (g && s.cleared && !foul) return finish(cur, `${P.name} đưa bi 8 vào lỗ đúng luật.`);
-      else return finish(1 - cur, foul ? `${P.name} phạm lỗi (${foul}) khi bi 8 vào lỗ.` : `${P.name} đưa bi 8 vào lỗ quá sớm.`);
+      if (S.isBreak) { respot8(); s.potted = s.potted.filter(n => n !== 8); }
+      else {
+        const win = g && s.cleared && !foul;
+        const w = win ? P : 1 - P;
+        const wins = { ...S.wins }; wins['p' + w]++;
+        return { ...base, balls: serialBalls(), phase: 'over', winner: w, reason: win ? 'clean' : foul ? 'foul8' : 'early',
+          wins, breaker: 1 - S.breaker, event: { id: rid(), kind: 'win', who: w } };
+      }
     }
-
-    if (!g && !foul && !isBreak && s.potted.length) {
+    const groups = { ...S.groups };
+    if (!g && !foul && !S.isBreak && s.potted.length) {
       const t = groupOf(s.potted[0]);
-      P.group = t; O.group = t === 'solid' ? 'stripe' : 'solid';
-      note += `${P.name} nhận ${groupName(t)}. `;
+      groups['p' + P] = t; groups['p' + (1 - P)] = t === 'solid' ? 'stripe' : 'solid';
     }
-    const ownPotted = P.group ? s.potted.some(n => groupOf(n) === P.group) : s.potted.length > 0;
-    isBreak = false; shot = null;
-
+    const mine = groups['p' + P];
+    const own = mine ? s.potted.some(n => groupOf(n) === mine) : s.potted.length > 0;
     if (foul) {
-      cur = 1 - cur; cue().on = false; state = 'place';
-      say(`${note}Lỗi: ${foul}. ${players[cur].name} chạm vào bàn để đặt bi cái.`, true);
-    } else if (ownPotted) {
-      state = 'aim'; say(`${note}${P.name} vào bi, đánh tiếp.`);
-    } else {
-      cur = 1 - cur; state = 'aim'; say(`${note}Hết lượt. Tới ${players[cur].name}.`);
+      balls[0].on = false;
+      return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'place', event: { id: rid(), kind: 'foul', who: 1 - P } };
     }
+    if (own) return { ...base, balls: serialBalls(), groups, cur: P, phase: 'aim', event: { id: rid(), kind: 'again', who: P } };
+    return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'aim', event: { id: rid(), kind: 'turn', who: 1 - P } };
   }
 
-  function finish(winner, reason) {
-    players[winner].wins++;
-    state = 'over'; shot = null; breaker = 1 - breaker;
-    $('winTitle').textContent = `${players[winner].name} thắng!`;
-    $('winReason').textContent = reason;
-    $('overlay').hidden = false;
-    say(`${players[winner].name} thắng ván này. ${reason}`);
-  }
-
-  function free(x, y, self) {
-    if (x < R || x > W - R || y < R || y > H - R) return false;
-    return balls.every(b => b === self || !b.on || Math.hypot(b.x - x, b.y - y) >= 2 * R + 0.5);
+  function onSimEnd() {
+    const s = sim; sim = null;
+    if (s.mine || !online) commit(computeEnd());
+    else if (S.phase === 'moving' && S.shot && S.shot.id === s.id) {
+      // Chưa nhận kết quả từ người đánh: tự tính, chờ 6 giây rồi ghi thay nếu máy kia mất kết nối
+      const patch = computeEnd(), id = s.id;
+      fallbackTimer = setTimeout(() => {
+        if (S.phase === 'moving' && S.shot && S.shot.id === id && mySeat() >= 0) commit(patch);
+      }, 6000);
+    } else loadBalls(S.balls);
+    if (pendingEvent) { popup(pendingEvent); pendingEvent = null; }
+    renderUI();
   }
 
   function place(p) {
-    const c = cue();
-    if (!free(p.x, p.y, c)) { say('Không đặt được ở đó — chọn chỗ trống trên mặt bàn.', true); return; }
-    c.x = p.x; c.y = p.y; c.vx = c.vy = 0; c.on = true; state = 'aim';
-    say(`${players[cur].name} đã đặt bi cái. Ngắm rồi kéo thanh lực.`);
+    if (!isPlacing()) return;
+    const c = balls[0];
+    if (!free(p.x, p.y, c)) { popup({ kind: 'bad' }); return; }
+    c.x = p.x; c.y = p.y; c.vx = c.vy = 0; c.on = true;
+    commit({ balls: serialBalls(), phase: 'aim', seq: S.seq + 1 });
+  }
+
+  // ---------- Xếp lại bàn: cần cả hai đồng ý ----------
+  function doReset() { commit(freshState(S)); }
+  function pressReset() {
+    if (sim) return;
+    if (!online) return doReset();
+    const me = mySeat(); if (me < 0) return;
+    const oid = S.seats['p' + (1 - me)];
+    if (!oid || oid === myId) return doReset();
+    if (S.reset['p' + me]) return commit({ reset: { ['p' + me]: false } });
+    if (S.reset['p' + (1 - me)]) return doReset();
+    commit({ reset: { ['p' + me]: true } });
+  }
+  const declineReset = () => commit({ reset: { p0: false, p1: false } });
+
+  // ---------- Đồng bộ online ----------
+  function onRemote(snap) {
+    if (!snap.exists) return;
+    const d = normalize(snap.data());
+    if (synced && d.seq < S.seq) return;
+    synced = true;
+    const prev = S; S = d;
+    if (S.phase === 'moving' && S.shot && S.shot.id !== lastShotId) startSim(S.shot, false);
+    else if (S.phase !== 'moving') {
+      if (sim && sim.mine) { sim = null; loadBalls(S.balls); }
+      else if (sim) authAt = performance.now();
+      else loadBalls(S.balls);
+    }
+    afterState(prev);
+    refreshProfiles();
+    if (canWrite !== false && mySeat() < 0 && (!S.seats.p0 || !S.seats.p1)) claimSeat();
+  }
+
+  async function withLock(fn) {
+    try {
+      const r = await lockRef.acquire({ holder: myId, ttlMs: 5000 });
+      if (!r.acquired) return false;
+    } catch (e) { console.warn('lock', e); }
+    await fn();
+    return true;
+  }
+
+  let claiming = false;
+  async function claimSeat() {
+    if (claiming || mySeat() >= 0) return;
+    claiming = true;
+    try {
+      await withLock(async () => {
+        const snap = await mainRef.get();
+        if (!snap.exists) return;
+        const d = normalize(snap.data());
+        if (d.seats.p0 === myId || d.seats.p1 === myId) return;
+        const k = !d.seats.p0 ? 'p0' : !d.seats.p1 ? 'p1' : null;
+        if (k) await mainRef.update({ seats: { [k]: myId } });
+      });
+    } catch (e) { console.warn('seat', e); }
+    setTimeout(() => { claiming = false; }, 1500);
+  }
+
+  async function createTable() {
+    try {
+      await withLock(async () => {
+        const snap = await mainRef.get();
+        if (snap.exists) return;
+        const ns = freshState(null); ns.seats.p0 = myId;
+        await mainRef.set(ns);
+      });
+    } catch (e) { console.warn('create', e); }
+  }
+
+  async function refreshProfiles() {
+    if (!userCap) return;
+    const ids = [S.seats.p0, S.seats.p1].filter(Boolean);
+    if (!ids.length) return;
+    try {
+      const ps = await userCap.profiles(ids);
+      let changed = false;
+      for (const id of ids) {
+        const p = ps[id]; if (!p) continue;
+        const v = { name: p.name || '', avatarUrl: p.avatarUrl || '' };
+        if (!profiles[id] || profiles[id].name !== v.name || profiles[id].avatarUrl !== v.avatarUrl) { profiles[id] = v; changed = true; }
+      }
+      if (changed) renderUI();
+    } catch (e) { console.warn('profiles', e); }
+  }
+
+  async function initOnline() {
+    if (!window.claude || !window.claude.use) return;
+    const db = await window.claude.use('db');
+    if (!db) return;
+    userCap = await window.claude.use('user');
+    myId = userCap ? await userCap.id() : null;
+    if (!myId) return; // không có danh tính: chơi chung một máy
+    canWrite = await userCap.can('data.write');
+    mainRef = db.doc('tables/main'); lockRef = db.doc('tables/lock');
+    let settled = false;
+    mainRef.onSnapshot(snap => {
+      if (!settled) {
+        if (snap.metadata.fromCache) { if (snap.exists) { online = true; onRemote(snap); } return; }
+        settled = true; online = true;
+        if (!snap.exists) { if (canWrite !== false) createTable(); return; }
+        onRemote(snap);
+        popup({ kind: S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
+        return;
+      }
+      onRemote(snap);
+    }, e => console.warn('db', e));
   }
 
   // ---------- Vẽ ----------
-  // Hướng ánh sáng/bóng đổ tính theo màn hình, đổi sang toạ độ bàn khi bàn đứng
   const scr = (sx, sy) => vert ? { x: -sy, y: sx } : { x: sx, y: sy };
 
   function roundRect(x, y, w, h, r) {
@@ -373,9 +538,8 @@
   }
 
   function drawTable() {
-    const g0 = scr(0, -1);
-    const wood = ctx.createLinearGradient(CW / 2 - g0.x * CW / 2, CH / 2 - g0.y * CH / 2, CW / 2 + g0.x * CW / 2, CH / 2 + g0.y * CH / 2);
-    wood.addColorStop(0, '#3a2112'); wood.addColorStop(.5, '#4e2e1a'); wood.addColorStop(1, '#6a4026');
+    const wood = ctx.createLinearGradient(0, 0, 0, CH);
+    wood.addColorStop(0, '#5a3620'); wood.addColorStop(.5, '#4e2e1a'); wood.addColorStop(1, '#5a3620');
     roundRect(0, 0, CW, CH, 18); ctx.fillStyle = wood; ctx.fill();
     ctx.fillStyle = '#16597a'; ctx.fillRect(RAIL - 12, RAIL - 12, W + 24, H + 24);
     const felt = ctx.createRadialGradient(CW / 2, CH / 2, 40, CW / 2, CH / 2, CW * .6);
@@ -426,7 +590,7 @@
   }
 
   function drawGuide() {
-    const c = cue(), dx = Math.cos(aim), dy = Math.sin(aim);
+    const c = balls[0], dx = Math.cos(aim), dy = Math.sin(aim);
     let t = Infinity, hit = null;
     for (const b of balls) {
       if (!b.on || b === c) continue;
@@ -462,7 +626,7 @@
   }
 
   function drawStick() {
-    const c = cue(), dx = Math.cos(aim), dy = Math.sin(aim);
+    const c = balls[0], dx = Math.cos(aim), dy = Math.sin(aim);
     const back = R + 6 + power * 90;
     const seg = (from, to, w, col) => {
       ctx.strokeStyle = col; ctx.lineWidth = w;
@@ -484,14 +648,15 @@
   function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, LW, LH);
-    if (vert) { ctx.translate(0, CW); ctx.rotate(-Math.PI / 2); } // bàn đứng: đầu bàn (chỗ phá) ở dưới
+    if (vert) { ctx.translate(0, CW); ctx.rotate(-Math.PI / 2); }
     drawTable();
     ctx.translate(RAIL, RAIL);
-    if (state === 'aim') drawGuide();
+    const aiming = isAiming() && balls[0].on;
+    if (aiming) drawGuide();
     for (const b of balls) if (b.on) drawBall(b);
-    if (state === 'aim') drawStick();
-    if (state === 'place' && hover) {
-      const ok = free(hover.x, hover.y, cue());
+    if (aiming) drawStick();
+    if (isPlacing() && hover) {
+      const ok = free(hover.x, hover.y, balls[0]);
       drawBall({ n: 0, x: hover.x, y: hover.y }, .6);
       ctx.strokeStyle = ok ? '#9fd7f2' : '#ff8a73'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(hover.x, hover.y, R + 3, 0, Math.PI * 2); ctx.stroke();
@@ -499,38 +664,136 @@
   }
 
   // ---------- Giao diện ----------
-  function renderUI() {
-    players.forEach((p, i) => {
-      $('p' + i).classList.toggle('active', i === cur && state !== 'over');
-      $('wins' + i).textContent = p.wins;
-      const rack = $('rack' + i); rack.innerHTML = '';
-      if (!p.group) return;
-      const left = remaining(p.group);
-      for (const n of (left ? nums(p.group) : [8])) {
-        const d = document.createElement('span');
-        d.className = 'dot' + (onTable(n) ? '' : ' gone');
-        d.style.background = n > 8 ? `linear-gradient(#f4f1e8 0 25%, ${colorOf(n)} 25% 75%, #f4f1e8 75%)` : colorOf(n);
-        d.title = `Bi ${n}`;
-        rack.appendChild(d);
-      }
-    });
-    const st = $('status'); st.textContent = msg; st.classList.toggle('foul', msgFoul);
-    pull.classList.toggle('off', state !== 'aim');
-    $('wheel').classList.toggle('off', state !== 'aim');
+  function whoName(i) {
+    if (!online) return 'Người ' + (i + 1);
+    const id = S.seats['p' + i];
+    if (id && id === myId) return 'bạn';
+    return (id && profiles[id] && profiles[id].name) || 'Người ' + (i + 1);
   }
 
+  function paintAvatar(el, i) {
+    const id = online ? S.seats['p' + i] : null;
+    const url = id && profiles[id] ? profiles[id].avatarUrl : '';
+    const label = online && !id ? '+' : String(i + 1);
+    const key = url + '|' + label;
+    if (el.dataset.k === key) return;
+    el.dataset.k = key;
+    el.textContent = '';
+    if (url) {
+      const img = document.createElement('img');
+      img.alt = ''; img.src = url;
+      img.onerror = () => { el.textContent = label; };
+      el.appendChild(img);
+    } else el.textContent = label;
+  }
+
+  function popup(ev) {
+    const t = $('toast');
+    const n = ev.who != null ? whoName(ev.who) : '';
+    let text, foul = false;
+    switch (ev.kind) {
+      case 'start': text = cap(n) + ' phá bi'; break;
+      case 'turn': text = 'Lượt của ' + n; break;
+      case 'again': text = cap(n) + ' đánh tiếp'; break;
+      case 'foul': text = 'Lỗi · ' + cap(n) + ' đặt bi cái'; foul = true; break;
+      case 'bad': text = 'Không đặt được'; foul = true; break;
+      default: return;
+    }
+    t.textContent = text;
+    t.className = 'toast' + (foul ? ' foul' : '');
+    t.hidden = false;
+    void t.offsetWidth;
+    t.classList.add('show');
+  }
+  $('toast').addEventListener('animationend', () => { $('toast').hidden = true; });
+
+  function renderUI() {
+    const me = mySeat();
+    [0, 1].forEach(i => {
+      const el = $('who' + i), key = 'p' + i;
+      el.classList.toggle('active', S.cur === i && S.phase !== 'over');
+      el.classList.toggle('mine', online && S.seats[key] === myId);
+      el.classList.toggle('empty', online && !S.seats[key]);
+      el.setAttribute('aria-label', whoName(i));
+      paintAvatar($('av' + i), i);
+      $('wins' + i).textContent = S.wins[key];
+      const rack = $('rack' + i); rack.textContent = '';
+      const g = S.groups[key];
+      if (g) {
+        const left = remaining(g);
+        for (const n of (left ? nums(g) : [8])) {
+          const d = document.createElement('span');
+          d.className = 'dot' + (onTable(n) ? '' : ' gone');
+          d.style.background = n > 8 ? `linear-gradient(#f4f1e8 0 25%, ${colorOf(n)} 25% 75%, #f4f1e8 75%)` : colorOf(n);
+          rack.appendChild(d);
+        }
+      }
+    });
+    pull.classList.toggle('off', !isAiming());
+    wheel.classList.toggle('off', !isAiming());
+
+    const myVote = me >= 0 && S.reset['p' + me];
+    const otherVote = me >= 0 && S.reset['p' + (1 - me)];
+    $('resetBtn').classList.toggle('waiting', !!myVote);
+    $('resetBtn').hidden = online && me < 0;
+
+    const asking = online && me >= 0 && !myVote && otherVote && S.phase !== 'over';
+    $('ask').hidden = !asking;
+    if (asking) paintAvatar($('askAv'), 1 - me);
+
+    $('over').hidden = S.phase !== 'over';
+    if (S.phase === 'over') {
+      paintAvatar($('winAv'), S.winner);
+      $('winTitle').textContent = cap(whoName(S.winner)) + ' thắng';
+      const btn = $('againBtn');
+      btn.textContent = myVote ? 'Đang chờ…' : otherVote ? 'Đồng ý ván mới' : 'Ván mới';
+      btn.hidden = online && me < 0;
+    }
+  }
+
+  function setPower(p) {
+    power = Math.max(0, Math.min(1, p));
+    const pct = Math.round(power * 100);
+    const fill = $('pullFill');
+    fill.style[vert ? 'width' : 'height'] = pct + '%';
+    fill.style[vert ? 'height' : 'width'] = '';
+    fill.classList.toggle('hot', pct >= 85);
+    $('powerOut').textContent = pct;
+    pull.setAttribute('aria-valuenow', pct);
+  }
+
+  // ---------- Kích thước ----------
+  function layout() {
+    vert = window.innerWidth < window.innerHeight && window.innerWidth < 900;
+    const app = $('app');
+    app.classList.toggle('vert', vert);
+    LW = vert ? CH : CW; LH = vert ? CW : CH;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(LW * dpr); canvas.height = Math.round(LH * dpr);
+    const cs = getComputedStyle(app);
+    const iw = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const ih = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const ratio = LW / LH;
+    const availW = vert ? iw : iw - 2 * 46 - 2 * 6;
+    const availH = vert ? ih - 40 - 52 - 2 * 6 : ih;
+    const w = Math.max(120, Math.min(availW, availH * ratio)), h = w / ratio;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    for (const c of document.querySelectorAll('.col')) c.style.height = vert ? '' : h + 'px';
+    setPower(power);
+  }
+
+  // ---------- Điều khiển ----------
   function toPlay(e) {
     const r = canvas.getBoundingClientRect();
     const sx = (e.clientX - r.left) / r.width * LW, sy = (e.clientY - r.top) / r.height * LH;
-    const lx = vert ? CW - sy : sx, ly = vert ? sx : sy;
-    return { x: lx - RAIL, y: ly - RAIL };
+    return { x: (vert ? CW - sy : sx) - RAIL, y: (vert ? sx : sy) - RAIL };
   }
-  function aimAt(p) { const c = cue(); if (c.on && Math.hypot(p.x - c.x, p.y - c.y) > 2) aim = Math.atan2(p.y - c.y, p.x - c.x); }
+  function aimAt(p) { const c = balls[0]; if (c.on && Math.hypot(p.x - c.x, p.y - c.y) > 2) aim = Math.atan2(p.y - c.y, p.x - c.x); }
 
-  // Bàn: chạm/kéo để ngắm; chuột: rê để ngắm, nhấn giữ + kéo ra xa để lấy lực
+  let tablePull = null;
   canvas.addEventListener('pointermove', e => {
     hover = toPlay(e);
-    if (state !== 'aim') return;
+    if (!isAiming()) return;
     if (tablePull) {
       const r = canvas.getBoundingClientRect();
       setPower(Math.hypot(e.clientX - tablePull.x, e.clientY - tablePull.y) / (Math.min(r.width, r.height) * 0.6));
@@ -538,64 +801,62 @@
   });
   canvas.addEventListener('pointerdown', e => {
     hover = toPlay(e);
-    if (state === 'place') { place(hover); return; }
-    if (state !== 'aim') return;
+    if (isPlacing()) { place(hover); return; }
+    if (!isAiming()) return;
     canvas.setPointerCapture(e.pointerId);
     if (e.pointerType === 'mouse' && e.button === 0) { tablePull = { x: e.clientX, y: e.clientY }; setPower(0); }
     else aimAt(hover);
   });
-  const endTablePull = shootIt => {
-    if (!tablePull) return;
-    tablePull = null;
-    shootIt ? shoot() : setPower(0);
-  };
-  canvas.addEventListener('pointerup', () => endTablePull(true));
-  canvas.addEventListener('pointercancel', () => endTablePull(false));
+  canvas.addEventListener('pointerup', () => { if (tablePull) { tablePull = null; shoot(); } });
+  canvas.addEventListener('pointercancel', () => { if (tablePull) { tablePull = null; setPower(0); } });
 
-  // Thanh lực: kéo xuống tới đâu lực tới đó, thả để đánh
+  // Thanh lực: kéo tới đâu lực tới đó, thả tay là đánh
   let pullStart = null;
   pull.addEventListener('pointerdown', e => {
-    if (state !== 'aim') return;
+    if (!isAiming()) return;
     pull.setPointerCapture(e.pointerId);
-    pullStart = e.clientY; setPower(0);
-    e.preventDefault();
+    pullStart = vert ? e.clientX : e.clientY; setPower(0); e.preventDefault();
   });
   pull.addEventListener('pointermove', e => {
     if (pullStart == null) return;
-    const h = pull.getBoundingClientRect().height;
-    setPower((e.clientY - pullStart) / (h * 0.8));
+    const r = pull.getBoundingClientRect();
+    setPower(((vert ? e.clientX : e.clientY) - pullStart) / ((vert ? r.width : r.height) * 0.8));
   });
   pull.addEventListener('pointerup', () => { if (pullStart == null) return; pullStart = null; shoot(); });
   pull.addEventListener('pointercancel', () => { pullStart = null; setPower(0); });
-  pull.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { shoot(); e.preventDefault(); e.stopPropagation(); }
-  });
+  pull.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { shoot(); e.preventDefault(); e.stopPropagation(); } });
 
-  // Thanh xoay bên phải: kéo xuống xoay theo chiều kim đồng hồ, kéo lên xoay ngược lại
-  const wheel = $('wheel');
-  let wheelY = null, wheelOff = 0;
+  // Thanh xoay gậy
+  let wheelPos = null, wheelOff = 0;
   wheel.addEventListener('pointerdown', e => {
-    if (state !== 'aim') return;
-    wheel.setPointerCapture(e.pointerId); wheelY = e.clientY; e.preventDefault();
+    if (!isAiming()) return;
+    wheel.setPointerCapture(e.pointerId); wheelPos = vert ? e.clientX : e.clientY; e.preventDefault();
   });
   wheel.addEventListener('pointermove', e => {
-    if (wheelY == null) return;
-    const d = e.clientY - wheelY; wheelY = e.clientY;
-    aim += d * 0.0025; wheelOff += d; wheel.style.backgroundPositionY = wheelOff + 'px';
+    if (wheelPos == null) return;
+    const p = vert ? e.clientX : e.clientY, d = p - wheelPos; wheelPos = p;
+    aim += d * 0.0025; wheelOff += d;
+    wheel.style.backgroundPosition = vert ? `${wheelOff}px 0` : `0 ${wheelOff}px`;
   });
-  ['pointerup', 'pointercancel'].forEach(t => wheel.addEventListener(t, () => { wheelY = null; }));
+  ['pointerup', 'pointercancel'].forEach(t => wheel.addEventListener(t, () => { wheelPos = null; }));
   wheel.addEventListener('keydown', e => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { aim += (e.key === 'ArrowDown' ? 1 : -1) * 0.004; e.preventDefault(); e.stopPropagation(); }
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (isAiming()) aim += (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1) * 0.004;
+      e.preventDefault(); e.stopPropagation();
+    }
   });
 
-  $('newBtn').addEventListener('click', newGame);
-  $('againBtn').addEventListener('click', newGame);
+  $('resetBtn').addEventListener('click', pressReset);
+  $('againBtn').addEventListener('click', pressReset);
+  $('yesBtn').addEventListener('click', pressReset);
+  $('noBtn').addEventListener('click', declineReset);
+
   window.addEventListener('keydown', e => {
-    if (e.target instanceof HTMLInputElement) return;
+    if (!isAiming()) return;
     const fine = e.shiftKey ? 0.002 : 0.012;
     if (e.key === 'ArrowLeft') { aim -= fine; e.preventDefault(); }
     else if (e.key === 'ArrowRight') { aim += fine; e.preventDefault(); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { if (state === 'aim') setPower(power + (e.key === 'ArrowDown' ? 0.05 : -0.05)); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { setPower(power + (e.key === 'ArrowDown' ? 0.05 : -0.05)); e.preventDefault(); }
     else if (e.key === ' ' && e.target.tagName !== 'BUTTON') { shoot(); e.preventDefault(); }
   });
   window.addEventListener('resize', layout);
@@ -603,18 +864,27 @@
   let last = performance.now();
   function loop(now) {
     const frames = Math.min((now - last) / (1000 / 60), 3); last = now;
-    if (state === 'moving') {
+    if (sim) {
       const steps = Math.max(1, Math.round(frames * SUB));
       for (let i = 0; i < steps; i++) step(1 / SUB);
-      if (!moving()) endShot();
+      if (!moving()) onSimEnd();
+      else if (!sim.mine && S.phase !== 'moving' && authAt && now - authAt > 2500) {
+        sim = null; authAt = 0; loadBalls(S.balls);
+        if (pendingEvent) { popup(pendingEvent); pendingEvent = null; }
+        renderUI();
+      }
     }
     draw();
     requestAnimationFrame(loop);
   }
 
+  S = freshState(null);
+  loadBalls(S.balls);
   layout();
-  newGame();
+  renderUI();
+  popup(S.event);
   requestAnimationFrame(loop);
+  initOnline().catch(e => console.warn('online', e));
 })();
 </script>
 <!-- ARTIFACT:END -->
