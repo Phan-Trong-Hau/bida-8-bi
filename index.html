@@ -292,6 +292,13 @@
     <div class="modal" id="spinPick" hidden>
       <div class="spin-big" id="spinBig" role="slider" aria-label="Kéo chấm để chọn điểm chạm cơ"><span class="spin-dot" id="spinBigDot"></span></div>
     </div>
+    <div class="modal" id="confirmReset" hidden>
+      <div class="card">
+        <h2>Xếp lại bàn?</h2>
+        <p class="note" id="confirmNote"></p>
+        <div class="row"><button id="cfNo">Huỷ</button><button class="primary" id="cfYes">Xếp lại</button></div>
+      </div>
+    </div>
     <div class="modal" id="ask" hidden>
       <div class="card">
         <div class="avatar" id="askAv"></div>
@@ -484,6 +491,11 @@
   }
 
   function afterState(prev) {
+    // đối phương từ chối yêu cầu xếp lại bàn của mình
+    const meSeat = mySeat();
+    if (prev && online && meSeat >= 0 && prev.reset['p' + meSeat] && !S.reset['p' + meSeat] && S.event.id === prev.event.id) {
+      if (cancelling) cancelling = false; else popup({ kind: 'declined', who: 1 - meSeat });
+    }
     if (prev && S.event.id !== prev.event.id) {
       setSpin(0, 0); // mỗi lượt đánh mới: điểm chạm về chính giữa
       if (sim) pendingEvent = S.event; else popup(S.event);
@@ -694,7 +706,7 @@
     if (!s.potted.length && [...s.near].some(n => !s.potted.includes(n))) fx.near = true;
     if (foul) {
       balls[0].on = false;
-      return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'place', event: { id: rid(), kind: 'foul', who: 1 - P, fx } };
+      return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'place', lastFoul: { by: P, code: foul }, event: { id: rid(), kind: 'foul', who: 1 - P, fx } };
     }
     if (own) {
       const n = (S.streak && S.streak.who === P ? S.streak.n : 0) + 1;
@@ -705,6 +717,7 @@
   }
 
   function onSimEnd() {
+    noteSimFoul();
     const s = sim; sim = null;
     if (s.mine || !online) commit(computeEnd());
     else if (S.phase === 'moving' && S.shot && S.shot.id === s.id) {
@@ -737,7 +750,9 @@
     if (S.reset['p' + me]) return commit({ reset: { ['p' + me]: false } });
     if (S.reset['p' + (1 - me)]) return doReset();
     commit({ reset: { ['p' + me]: true } });
+    popup({ kind: 'sent', who: 1 - me });
   }
+  let cancelling = false;
   const declineReset = () => commit({ reset: { p0: false, p1: false } });
 
   // ---------- Đồng bộ online ----------
@@ -1331,12 +1346,21 @@
     need8: 'phải chạm bi 8 trước', early8: 'chạm bi 8 khi chưa có nhóm bi',
   };
   const GROUP_TEXT = { solid: 'bi trơn (1–7)', stripe: 'bi sọc (9–15)' };
-  const joinEvent = () => ({ kind: S.isBreak ? 'start' : S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
+  const joinEvent = () => S.isBreak ? { kind: 'start', who: S.cur }
+    : S.phase === 'place' ? { kind: 'foul', who: S.cur, fx: S.lastFoul ? { by: S.lastFoul.by, foul: S.lastFoul.code } : { by: 1 - S.cur } }
+    : { kind: 'turn', who: S.cur };
+  // lý do lỗi tự suy ra từ cú đánh vừa mô phỏng trên máy này (khi máy kia gửi thiếu thông tin)
+  let simFoul = null;
+  function noteSimFoul() {
+    simFoul = !shotRec ? null : shotRec.scratch ? 'scratch' : shotRec.firstHit == null ? 'miss' : null;
+  }
   function popup(ev) {
     celebrate(ev);
     const t = $('toast'), fx = ev.fx || {};
     const n = ev.who != null ? whoName(ev.who) : '';
-    const by = fx.by != null ? whoName(fx.by) : '';
+    const byIdx = fx.by != null ? fx.by : ev.kind === 'foul' && ev.who != null ? 1 - ev.who : null;
+    const by = byIdx != null ? whoName(byIdx) : '';
+    const foulCode = fx.foul || (ev.kind === 'foul' ? simFoul : null);
     let main, sub = '', foul = false;
     switch (ev.kind) {
       case 'start':
@@ -1346,13 +1370,16 @@
       case 'turn': main = 'Tới lượt ' + n; if (by && fx.by !== ev.who) sub = cap(by) + ' không ăn được bi'; break;
       case 'again': main = cap(n) + ' ăn bi, được đánh tiếp'; break;
       case 'foul':
-        main = by ? cap(by) + ' đánh lỗi' + (FOUL_TEXT[fx.foul] ? ': ' + FOUL_TEXT[fx.foul] : '') : 'Có lỗi';
+        main = by ? cap(by) + ' đánh lỗi' + (FOUL_TEXT[foulCode] ? ': ' + FOUL_TEXT[foulCode] : '') : 'Có lỗi';
         sub = cap(n) + ' được đặt bi trắng ở bất kỳ đâu'; foul = true; break;
       case 'bad': main = 'Chỗ này không đặt được bi trắng'; sub = 'Chọn chỗ trống trên mặt bàn'; foul = true; break;
       case 'joined': main = cap(n) + ' đã vào bàn'; break;
       case 'back': main = 'Đã kết nối lại'; break;
       case 'left': main = 'Mất kết nối'; sub = 'Đang thử kết nối lại…'; foul = true; break;
       case 'noroom': main = 'Đang tìm phòng…'; break;
+      case 'sent': main = 'Đã gửi yêu cầu xếp lại bàn'; sub = 'Chờ ' + n + ' đồng ý'; break;
+      case 'cancel': main = 'Đã huỷ yêu cầu xếp lại bàn'; break;
+      case 'declined': main = cap(n) + ' không đồng ý xếp lại bàn'; foul = true; break;
       default: return;
     }
     if (fx.assign && by) sub = (sub ? sub + ' · ' : '') + cap(by) + ' nhận ' + GROUP_TEXT[fx.assign];
@@ -1546,7 +1573,21 @@
   spinBig.addEventListener('dblclick', () => setSpin(0, 0));
   $('spinPick').addEventListener('pointerdown', e => { if (e.target.id === 'spinPick') $('spinPick').hidden = true; });
 
-  $('resetBtn').addEventListener('click', pressReset);
+  // bấm ⟲: hỏi chính mình trước, đồng ý rồi mới gửi yêu cầu sang đối phương
+  $('resetBtn').addEventListener('click', () => {
+    if (sim) return;
+    const me = mySeat();
+    if (online && me >= 0 && S.reset['p' + me]) {
+      cancelling = true; commit({ reset: { ['p' + me]: false } }); popup({ kind: 'cancel' }); return;
+    }
+    const oid = online && me >= 0 ? S.seats['p' + (1 - me)] : null;
+    $('confirmNote').textContent = oid && oid !== myId
+      ? 'Ván đang chơi sẽ bị xoá. ' + cap(whoName(1 - me)) + ' cần đồng ý nữa.'
+      : 'Ván đang chơi sẽ bị xoá.';
+    $('confirmReset').hidden = false;
+  });
+  $('cfNo').addEventListener('click', () => { $('confirmReset').hidden = true; });
+  $('cfYes').addEventListener('click', () => { $('confirmReset').hidden = true; pressReset(); });
   $('againBtn').addEventListener('click', pressReset);
   $('yesBtn').addEventListener('click', pressReset);
   $('noBtn').addEventListener('click', declineReset);
@@ -1569,7 +1610,7 @@
       for (let i = 0; i < steps; i++) step(1 / SUB);
       if (!moving()) onSimEnd();
       else if (!sim.mine && S.phase !== 'moving' && authAt && now - authAt > 2500) {
-        sim = null; authAt = 0; loadBalls(S.balls);
+        noteSimFoul(); sim = null; authAt = 0; loadBalls(S.balls);
         if (pendingEvent) { popup(pendingEvent); pendingEvent = null; }
         renderUI();
       }
