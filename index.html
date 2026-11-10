@@ -37,9 +37,10 @@
   .col { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 46px; flex: none; }
 
   .app.vert {
-    display: grid; grid-template-columns: 34px 1fr 1fr; align-content: center; justify-content: stretch;
-    grid-template-areas: "reset who0 who1" "table table table" "pull pull wheel";
+    display: grid; grid-template-columns: 34px 1fr 52px 1fr; align-content: center; justify-content: stretch;
+    grid-template-areas: "reset who0 . who1" "table table table table" "pull pull spin wheel";
   }
+  .vert #spinBtn { grid-area: spin; justify-self: center; align-self: center; }
   .vert .col { display: contents; }
   .vert #resetBtn { grid-area: reset; }
   .vert #who0 { grid-area: who0; flex-direction: row; justify-self: start; }
@@ -109,6 +110,23 @@
   .reset { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); flex: none; }
   .reset.waiting { color: var(--brass); border-color: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(216,169,79,.25); } }
+  .spin {
+    position: relative; flex: none; width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 50%;
+    border: 2px solid var(--line); background: radial-gradient(circle at 35% 30%, #fff, #e9e4d6 45%, #b9b2a2);
+  }
+  .spin.off { opacity: .35; cursor: not-allowed; }
+  .spin-dot {
+    position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
+    background: var(--foul); box-shadow: 0 0 0 2px rgba(226,115,93,.35); pointer-events: none;
+  }
+  .spin-big {
+    position: relative; width: min(56vmin, 220px); aspect-ratio: 1; border-radius: 50%; touch-action: none; cursor: crosshair;
+    background: radial-gradient(circle at 35% 30%, #fff, #ece7da 45%, #b4ad9c); box-shadow: 0 12px 30px rgba(0,0,0,.5);
+  }
+  .spin-big::before, .spin-big::after { content: ""; position: absolute; background: rgba(0,0,0,.14); pointer-events: none; }
+  .spin-big::before { left: 50%; top: 8%; bottom: 8%; width: 1px; }
+  .spin-big::after { top: 50%; left: 8%; right: 8%; height: 1px; }
+  .spin-big .spin-dot { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
 
   .toast {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -153,6 +171,9 @@
   <div class="table-wrap" id="tableWrap">
     <canvas id="table" aria-label="Bàn bida"></canvas>
     <div class="toast" id="toast" hidden></div>
+    <div class="modal" id="spinPick" hidden>
+      <div class="spin-big" id="spinBig" role="slider" aria-label="Kéo chấm để chọn điểm chạm cơ"><span class="spin-dot" id="spinBigDot"></span></div>
+    </div>
     <div class="modal" id="ask" hidden>
       <div class="card">
         <div class="avatar" id="askAv"></div>
@@ -171,6 +192,7 @@
 
   <div class="col" id="colR">
     <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><div class="rack" id="rack1"></div></div>
+    <button class="spin" id="spinBtn" aria-label="Điểm chạm cơ vào bi trắng" title="Điểm chạm cơ"><span class="spin-dot" id="spinDot"></span></button>
     <div class="wheel" id="wheel" role="slider" tabindex="0" aria-label="Xoay gậy — kéo để xoay">
       <div class="wheel-icon" aria-hidden="true"><span>↺</span><span>↻</span></div>
     </div>
@@ -202,7 +224,7 @@
   // S: trạng thái chung (đồng bộ giữa 2 máy). balls: bản mô phỏng cục bộ có vận tốc.
   let synced = false, online = false, mainRef = null, lockRef = null, userCap = null, myId = null, canWrite = null;
   const profiles = {};
-  let S, balls = [], aim = 0, power = 0, hover = null;
+  let S, balls = [], aim = 0, power = 0, hover = null, spin = { x: 0, y: 0 };
   let sim = null, shotRec = null, lastShotId = null, pendingEvent = null, fallbackTimer = null, authAt = 0;
   let writeQ = Promise.resolve();
 
@@ -278,6 +300,7 @@
 
   function afterState(prev) {
     if (prev && S.event.id !== prev.event.id) {
+      setSpin(0, 0); // mỗi lượt đánh mới: điểm chạm về chính giữa
       if (sim) pendingEvent = S.event; else popup(S.event);
     }
     renderUI();
@@ -300,6 +323,16 @@
     if (b.n === 0) shotRec.scratch = true; else shotRec.potted.push(b.n);
   }
 
+  // xoáy ngang: bi trắng bật băng lệch theo hướng xoáy (tác dụng 2 băng đầu, yếu dần)
+  function railSpin(b, axis) {
+    if (b.n !== 0 || !shotRec || !shotRec.spin.x || shotRec.rails >= 2) return;
+    const sp = Math.hypot(b.vx, b.vy); if (!sp) return;
+    const ux = b.vx / sp, uy = b.vy / sp, vn = Math.abs(axis === 'y' ? b.vy : b.vx);
+    const k = -shotRec.spin.x * 0.5 * vn * Math.pow(0.6, shotRec.rails);
+    if (axis === 'y') b.vx += -uy * k; else b.vy += ux * k;
+    shotRec.rails++;
+  }
+
   function step(dt) {
     const act = balls.filter(b => b.on);
     for (const b of act) { b.x += b.vx * dt; b.y += b.vy * dt; }
@@ -313,16 +346,20 @@
       if (dvn <= 0) continue;
       const imp = dvn * (1 + 0.95) / 2;
       a.vx -= imp * nx; a.vy -= imp * ny; b.vx += imp * nx; b.vy += imp * ny;
-      if (shotRec.firstHit == null) {
-        if (a.n === 0) shotRec.firstHit = b.n; else if (b.n === 0) shotRec.firstHit = a.n;
+      if (shotRec.firstHit == null && (a.n === 0 || b.n === 0)) {
+        const c = a.n === 0 ? a : b;
+        shotRec.firstHit = a.n === 0 ? b.n : a.n;
+        // xoáy dọc: chạm trên thì bi trắng chạy theo, chạm dưới thì giật lùi
+        const k = shotRec.spin.y * imp * 0.75;
+        c.vx += shotRec.dir.x * k; c.vy += shotRec.dir.y * k;
       }
     }
     for (const b of act) {
       if (!b.on) continue;
-      if (b.y < R && !inMouthX(b.x)) { b.y = R; b.vy = -b.vy * 0.78; }
-      if (b.y > H - R && !inMouthX(b.x)) { b.y = H - R; b.vy = -b.vy * 0.78; }
-      if (b.x < R && !inMouthY(b.y)) { b.x = R; b.vx = -b.vx * 0.78; }
-      if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; b.vx = -b.vx * 0.78; }
+      if (b.y < R && !inMouthX(b.x)) { b.y = R; railSpin(b, 'y'); b.vy = -b.vy * 0.78; }
+      if (b.y > H - R && !inMouthX(b.x)) { b.y = H - R; railSpin(b, 'y'); b.vy = -b.vy * 0.78; }
+      if (b.x < R && !inMouthY(b.y)) { b.x = R; railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
+      if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
       if (inPocket(b)) { pot(b); continue; }
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > 0) {
@@ -350,7 +387,8 @@
     const c = balls[0];
     c.vx = Math.cos(shot.aim) * shot.power * MAXV; c.vy = Math.sin(shot.aim) * shot.power * MAXV;
     const g = S.groups['p' + S.cur];
-    shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false };
+    shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false,
+      spin: shot.spin || { x: 0, y: 0 }, dir: { x: Math.cos(shot.aim), y: Math.sin(shot.aim) }, rails: 0 };
     sim = { id: shot.id, mine };
     lastShotId = shot.id;
     clearTimeout(fallbackTimer);
@@ -359,10 +397,10 @@
   function shoot() {
     if (!isAiming()) return;
     if (power < MIN_POWER) { setPower(0); return; }
-    const shot = { id: rid(), aim, power, balls: serialBalls(), by: myId || '' };
+    const shot = { id: rid(), aim, power, spin: { ...spin }, balls: serialBalls(), by: myId || '' };
     startSim(shot, true);
     commit({ phase: 'moving', shot, seq: S.seq + 1 });
-    setPower(0);
+    setPower(0); setSpin(0, 0);
   }
 
   function respot8() {
@@ -719,7 +757,9 @@
       const k = Math.abs(tx * dx + ty * dy);
       setLine(defLine, T(gx, gy, 1), T(gx + tx * len * k, gy + ty * len * k, 1));
     }
-    stick.position.copy(T(c.x, c.y, R));
+    // gậy dịch theo điểm chạm trên bi trắng
+    const off = R * 0.6;
+    stick.position.copy(T(c.x - dy * spin.x * off, c.y + dx * spin.x * off, R + spin.y * off));
     stick.rotation.y = -aim;
     stickInner.position.x = -(R + 4 + power * 90);
   }
@@ -829,6 +869,8 @@
     });
     pull.classList.toggle('off', !isAiming());
     wheel.classList.toggle('off', !isAiming());
+    $('spinBtn').classList.toggle('off', !isAiming());
+    if (!isAiming()) $('spinPick').hidden = true;
 
     const myVote = me >= 0 && S.reset['p' + me];
     const otherVote = me >= 0 && S.reset['p' + (1 - me)];
@@ -954,6 +996,25 @@
       e.preventDefault(); e.stopPropagation();
     }
   });
+
+  // Điểm chạm cơ vào bi trắng
+  function setSpin(x, y) {
+    const d = Math.hypot(x, y); if (d > .85) { x *= .85 / d; y *= .85 / d; }
+    spin = { x, y };
+    for (const id of ['spinDot', 'spinBigDot']) {
+      const el = $(id); el.style.left = (50 + x * 50) + '%'; el.style.top = (50 - y * 50) + '%';
+    }
+  }
+  const spinBig = $('spinBig');
+  $('spinBtn').addEventListener('click', () => { if (isAiming()) $('spinPick').hidden = false; });
+  const pickSpin = e => {
+    const r = spinBig.getBoundingClientRect();
+    setSpin((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height * 2 - 1));
+  };
+  spinBig.addEventListener('pointerdown', e => { spinBig.setPointerCapture(e.pointerId); pickSpin(e); e.preventDefault(); });
+  spinBig.addEventListener('pointermove', e => { if (e.buttons) pickSpin(e); });
+  spinBig.addEventListener('dblclick', () => setSpin(0, 0));
+  $('spinPick').addEventListener('pointerdown', e => { if (e.target.id === 'spinPick') $('spinPick').hidden = true; });
 
   $('resetBtn').addEventListener('click', pressReset);
   $('againBtn').addEventListener('click', pressReset);

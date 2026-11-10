@@ -11,6 +11,7 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 
 - **Ngắm:** chạm hoặc kéo trên bàn. Kéo thanh xoay (bên phải khi xoay ngang, góc dưới bên phải khi cầm dọc) để ngắm tinh.
 - **Lực:** kéo thanh lực (bên trái khi xoay ngang, góc dưới bên trái khi cầm dọc), kéo tới đâu lực tới đó, thả tay là đánh. Kéo ngược về 0 rồi thả để huỷ.
+- **Điểm chạm cơ:** chạm viên bi trắng nhỏ (cạnh avatar người 2 khi xoay ngang, giữa hàng dưới khi cầm dọc) rồi kéo chấm đỏ: trên = bi trắng chạy theo, dưới = giật lùi, trái/phải = xoáy ngang khi bật băng. Chạm ra ngoài để đóng, chạm đúp để về giữa. Mỗi lượt mặc định ở chính giữa.
 - **⟲:** xin xếp lại bàn. Đối thủ sẽ được hỏi đồng ý hay không.
 - **Chuột/phím:** rê để ngắm, nhấn giữ trên bàn và kéo ra xa để lấy lực. `←`/`→` ngắm tinh, `↑`/`↓` chỉnh lực, `Space` đánh.
 
