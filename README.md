@@ -15,7 +15,7 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 
 ## Sảnh
 
-Khi mở game sẽ có trang sảnh để nhập **tên**, chọn **avatar** (một trong 15 viên bi), **màu bàn** (navy, xanh lục bảo, đỏ rượu vang, xám than; do người tạo phòng chọn) và **màu gậy** (gỗ phong, đen carbon, đỏ ruby, vàng đồng). Tên và avatar được gửi sang máy bên kia. Trong ván bấm ⚙ để đổi lại. Lựa chọn được nhớ trên máy cho lần sau.
+Khi mở game sẽ có trang sảnh để nhập **tên**, chọn **avatar** (tải ảnh của bạn lên, hoặc chọn 1 trong 12 con vật hay 15 viên bi), **màu bàn** (navy, xanh lục bảo, đỏ rượu vang, xám than; do người tạo phòng chọn) và **gậy** (gỗ phong, đen carbon, đỏ ruby, vàng đồng, xanh sapphire, trắng ngà; có khung xem trước 3D). Tên và avatar được gửi sang máy bên kia. Trong ván bấm ⚙ để đổi lại. Lựa chọn được nhớ trên máy cho lần sau.
 
 ## Điều khiển
 

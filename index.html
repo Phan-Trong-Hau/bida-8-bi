@@ -123,6 +123,12 @@
     font-style: normal; background: #f4f1e8; color: #111; border-radius: 50%; width: 54%; height: 54%;
     display: grid; place-items: center; font: 700 11px/1 var(--body);
   }
+  .petav { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; background: #26303a; font-size: 1.25em; line-height: 1; }
+  .avatar .petav { font-size: 22px; }
+  .pick img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+  .pick .petav { font-size: 24px; }
+  .upload { display: grid; place-items: center; border-radius: 50%; border: 2px dashed var(--line); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.1; text-align: center; width: 100%; height: 100%; }
+  .cueprev { width: 100%; height: 72px; display: block; border-radius: 10px; background: radial-gradient(ellipse at 50% 40%, #222b33, var(--panel)); border: 1px solid var(--line); }
   .lobby {
     position: fixed; inset: 0; z-index: 50; overflow-y: auto; background: var(--room);
     padding-block: max(20px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
@@ -268,7 +274,8 @@
     <div class="field"><label class="lbl" for="lbName">Tên của bạn</label><input id="lbName" maxlength="16" autocomplete="nickname" placeholder="Nhập tên"></div>
     <div class="field"><span class="lbl">Avatar</span><div class="balls" id="lbBalls" role="group" aria-label="Chọn bi làm avatar"></div></div>
     <div class="field" id="lbFeltField"><span class="lbl">Màu bàn</span><div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div></div>
-    <div class="field"><span class="lbl">Màu gậy</span><div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div></div>
+    <div class="field"><span class="lbl">Gậy</span><canvas class="cueprev" id="cuePrev" aria-label="Xem trước gậy"></canvas><div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div></div>
+    <input type="file" id="lbFile" accept="image/*" hidden>
     <div class="field" id="lbRoomField"><label class="lbl" for="lbRoom">Có mã phòng? Nhập để vào</label>
       <div class="roomrow"><input id="lbRoom" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 số" autocomplete="off"><button id="lbJoin">Vào phòng</button></div>
       <p class="lb-err" id="lbErr" hidden>Mã phòng gồm 4 chữ số.</p>
@@ -307,7 +314,20 @@
     carbon: { name: 'Đen carbon', shaft: 0x2a2d31, ring: 0xb8bec6, butt: 0x101113 },
     ruby: { name: 'Đỏ ruby', shaft: 0xe3c48f, ring: 0xd8a94f, butt: 0x7a1424 },
     gold: { name: 'Vàng đồng', shaft: 0xf0d9a8, ring: 0x2b170c, butt: 0xb8862e },
+    sapphire: { name: 'Xanh sapphire', shaft: 0xe3c48f, ring: 0xc0c6cc, butt: 0x1c3d6e },
+    ivory: { name: 'Trắng ngà', shaft: 0xf2ead8, ring: 0x2b170c, butt: 0xe2d6bb },
   };
+  const ANIMALS = ['🐱', '🐶', '🐼', '🦊', '🐰', '🐻', '🐨', '🐯', '🐸', '🐧', '🐵', '🦁'];
+  // avatar: { t: 'ball', v: 1..15 } | { t: 'pet', v: con vật } | { t: 'img', v: ảnh data:image/jpeg }
+  function cleanAv(a, legacyBall) {
+    if (a && typeof a === 'object') {
+      if (a.t === 'ball' && +a.v >= 1 && +a.v <= 15) return { t: 'ball', v: Math.round(+a.v) };
+      if (a.t === 'pet' && ANIMALS.includes(a.v)) return { t: 'pet', v: a.v };
+      if (a.t === 'img' && typeof a.v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(a.v) && a.v.length < 60000) return { t: 'img', v: a.v };
+    }
+    const b = Math.round(+legacyBall);
+    return b >= 1 && b <= 15 ? { t: 'ball', v: b } : null;
+  }
   const hexCss = n => '#' + n.toString(16).padStart(6, '0');
   // Lựa chọn riêng của người chơi trên máy này
   const prefs = (() => {
@@ -315,7 +335,7 @@
     const ball = Math.round(+p.ball);
     return {
       name: typeof p.name === 'string' ? p.name.slice(0, 16) : '',
-      ball: ball >= 1 && ball <= 15 ? ball : 0,
+      av: cleanAv(p.av, ball),
       felt: FELTS[p.felt] ? p.felt : 'navy',
       cue: CUES[p.cue] ? p.cue : 'maple',
     };
@@ -1111,7 +1131,7 @@
 
   // ---------- Giao diện ----------
   function playerInfo(i) {
-    if (!online) return i === 0 ? { name: prefs.name, ball: prefs.ball } : null;
+    if (!online) return i === 0 ? { name: prefs.name, av: prefs.av } : null;
     const pl = S.players['p' + i];
     return pl && typeof pl === 'object' ? pl : null;
   }
@@ -1125,6 +1145,13 @@
   function ballBg(n) {
     return n > 8 ? `linear-gradient(#f4f1e8 0 24%, ${colorOf(n)} 24% 76%, #f4f1e8 76%)` : colorOf(n);
   }
+  function avatarNode(av) {
+    if (!av) return null;
+    if (av.t === 'ball') return ballAvatar(av.v);
+    if (av.t === 'pet') { const e = document.createElement('span'); e.className = 'petav'; e.textContent = av.v; return e; }
+    const img = document.createElement('img'); img.alt = ''; img.src = av.v; return img;
+  }
+  const avKey = av => !av ? '' : av.t === 'img' ? 'img' + av.v.length + av.v.slice(-24) : av.t + av.v;
   function ballAvatar(n) {
     const b = document.createElement('span'); b.className = 'ballav'; b.style.background = ballBg(n);
     const t = document.createElement('i'); t.textContent = n; b.appendChild(t); return b;
@@ -1134,19 +1161,20 @@
     if (!online || !started) return;
     const me = mySeat(); if (me < 0) return;
     const cur = S.players['p' + me] || {};
-    if (cur.name !== prefs.name || cur.ball !== prefs.ball) commit({ players: { ['p' + me]: { name: prefs.name, ball: prefs.ball } } });
+    if (cur.name !== prefs.name || avKey(cleanAv(cur.av, cur.ball)) !== avKey(prefs.av))
+      commit({ players: { ['p' + me]: { name: prefs.name, av: prefs.av } } });
   }
 
   function paintAvatar(el, i) {
     const id = online ? S.seats['p' + i] : null;
     const url = id && profiles[id] ? profiles[id].avatarUrl : '';
     const label = online && !id ? '+' : String(i + 1);
-    const pl = playerInfo(i), ball = pl ? Math.round(+pl.ball) : 0;
-    const key = url + '|' + label + '|' + ball;
+    const pl = playerInfo(i), av = pl ? cleanAv(pl.av, pl.ball) : null;
+    const key = url + '|' + label + '|' + avKey(av);
     if (el.dataset.k === key) return;
     el.dataset.k = key;
     el.textContent = '';
-    if (ball >= 1 && ball <= 15) el.appendChild(ballAvatar(ball));
+    if (av) el.appendChild(avatarNode(av));
     else if (url) {
       const img = document.createElement('img');
       img.alt = ''; img.src = url;
@@ -1393,12 +1421,40 @@
   function pressList(el, sel, key) { for (const b of el.children) b.setAttribute('aria-pressed', b.dataset.k === String(sel)); }
   function buildLobby() {
     const balls = $('lbBalls');
-    for (let n = 1; n <= 15; n++) {
-      const b = document.createElement('button'); b.className = 'pick'; b.dataset.k = n; b.setAttribute('aria-label', 'Bi ' + n);
-      b.appendChild(ballAvatar(n));
-      b.addEventListener('click', () => { prefs.ball = n; pressList(balls, n); });
-      balls.appendChild(b);
-    }
+    const addPick = (av, label) => {
+      const b = document.createElement('button'); b.className = 'pick'; b.dataset.k = avKey(av); b.setAttribute('aria-label', label);
+      b.appendChild(avatarNode(av));
+      b.addEventListener('click', () => { prefs.av = av; pressList(balls, avKey(av)); });
+      balls.appendChild(b); return b;
+    };
+    const up = document.createElement('button'); up.className = 'pick'; up.setAttribute('aria-label', 'Tải ảnh lên làm avatar');
+    up.innerHTML = '<span class="upload">Tải<br>ảnh</span>';
+    up.addEventListener('click', () => $('lbFile').click());
+    balls.appendChild(up);
+    let imgPick = null;
+    const showImgPick = () => {
+      if (imgPick) imgPick.remove(); imgPick = null;
+      if (prefs.av && prefs.av.t === 'img') { imgPick = addPick(prefs.av, 'Ảnh của bạn'); up.after(imgPick); }
+    };
+    showImgPick();
+    ANIMALS.forEach(a => addPick({ t: 'pet', v: a }, 'Con vật ' + a));
+    for (let n = 1; n <= 15; n++) addPick({ t: 'ball', v: n }, 'Bi ' + n);
+    // ảnh tải lên: cắt vuông giữa ảnh, thu về 96×96 để gửi nhẹ
+    $('lbFile').addEventListener('change', () => {
+      const f = $('lbFile').files && $('lbFile').files[0]; if (!f) return;
+      const url = URL.createObjectURL(f), im = new Image();
+      im.onload = () => {
+        const c = document.createElement('canvas'); c.width = c.height = 96;
+        const k = Math.min(im.width, im.height);
+        c.getContext('2d').drawImage(im, (im.width - k) / 2, (im.height - k) / 2, k, k, 0, 0, 96, 96);
+        URL.revokeObjectURL(url);
+        const av = cleanAv({ t: 'img', v: c.toDataURL('image/jpeg', .8) });
+        if (!av) return;
+        prefs.av = av; showImgPick(); pressList(balls, avKey(av));
+      };
+      im.onerror = () => URL.revokeObjectURL(url);
+      im.src = url; $('lbFile').value = '';
+    });
     const swatch = (el, list, field, chip) => {
       for (const [k, v] of Object.entries(list)) {
         const b = document.createElement('button'); b.className = 'sw'; b.dataset.k = k;
@@ -1410,7 +1466,7 @@
         b.append(c, t);
         b.addEventListener('click', () => {
           prefs[field] = k; pressList(el, k);
-          if (field === 'cue') applyCue(k);
+          if (field === 'cue') { applyCue(k); paintCuePreview(k); }
           if (field === 'felt' && (!online || mySeat() === 0 || lobbyMode === 'start')) applyFelt(k);
         });
         el.appendChild(b);
@@ -1430,10 +1486,47 @@
     $('lbRoom').addEventListener('input', () => { $('lbErr').hidden = true; });
     $('lbName').addEventListener('keydown', e => { if (e.key === 'Enter') lobbyGo(); });
   }
+  // xem trước gậy 3D trong sảnh
+  let cpR = null, cpScene, cpCam, cpGroup, cpMats = [];
+  function initCuePreview() {
+    const cv = $('cuePrev');
+    cpR = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+    cpR.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    cpScene = new THREE.Scene();
+    cpScene.add(new THREE.HemisphereLight(0xffffff, 0x333333, .8));
+    const d = new THREE.DirectionalLight(0xfff2dc, .9); d.position.set(-1, 2, 3); cpScene.add(d);
+    cpCam = new THREE.OrthographicCamera(-230, 230, 30, -30, -100, 100);
+    cpGroup = new THREE.Group(); cpScene.add(cpGroup);
+    const parts = [[0, 4, 2.5, 2.6, 0x3f8fc0], [4, 14, 2.6, 2.7, 0xf4f1e8], [14, 270, 2.7, 3.6, 0], [270, 292, 3.6, 3.8, 0], [292, 430, 3.8, 5, 0], [430, 434, 5, 5, 0x111111]];
+    for (const [from, to, r1, r2, color] of parts) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r1 * 1.6, r2 * 1.6, to - from, 28), new THREE.MeshStandardMaterial({ color, roughness: .35 }));
+      m.rotation.z = -Math.PI / 2; m.position.x = 217 - (from + (to - from) / 2); cpGroup.add(m); cpMats.push(m.material);
+    }
+    cpGroup.rotation.z = .04;
+  }
+  function paintCuePreview(key) {
+    if (!cpR) return;
+    const c = CUES[key] || CUES.maple;
+    cpMats[2].color.setHex(c.shaft); cpMats[3].color.setHex(c.ring); cpMats[4].color.setHex(c.butt);
+  }
+  function cuePreviewLoop(t) {
+    if ($('lobby').hidden || !cpR) return;
+    const cv = $('cuePrev'), w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * cpR.getPixelRatio())) {
+      cpR.setSize(w, h, false);
+      const half = 230, vh = half * h / w; Object.assign(cpCam, { left: -half, right: half, top: vh, bottom: -vh }); cpCam.updateProjectionMatrix();
+    }
+    cpGroup.rotation.x = t / 900;
+    cpR.render(cpScene, cpCam);
+    requestAnimationFrame(cuePreviewLoop);
+  }
   function openLobby(mode) {
     lobbyMode = mode;
     $('lbName').value = prefs.name;
-    pressList($('lbBalls'), prefs.ball); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
+    if (!cpR) initCuePreview();
+    paintCuePreview(prefs.cue);
+    requestAnimationFrame(cuePreviewLoop);
+    pressList($('lbBalls'), avKey(prefs.av)); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
     const canFelt = mode === 'start' ? !invited() : (!online || mySeat() === 0);
     $('lbFeltField').hidden = !canFelt;
     $('lbRoomField').hidden = !(mode === 'start' && window.mqtt && !(window.claude && window.claude.use) && !invited());
