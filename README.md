@@ -17,6 +17,11 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 
 Khi mở game sẽ có trang sảnh để nhập **tên**, chọn **avatar** (tải ảnh của bạn lên, hoặc chọn 1 trong 12 con vật hay 15 viên bi), **màu bàn** (navy, xanh lục bảo, đỏ rượu vang, xám than; do người tạo phòng chọn) và **gậy** (gỗ phong, đen carbon, đỏ ruby, vàng đồng, xanh sapphire, trắng ngà; có khung xem trước 3D). Tên và avatar được gửi sang máy bên kia. Trong ván bấm ⚙ để đổi lại. Lựa chọn được nhớ trên máy cho lần sau.
 
+## Thời gian & lịch sử
+
+- **Thời gian mỗi lượt** (người tạo phòng chọn): không giới hạn, 15 giây, 30 giây, 1, 2, 3 hoặc 5 phút. Đồng hồ đếm ngược hiện dưới avatar người tới lượt, chỉ chạy khi đủ hai người. Hết giờ thì mất lượt, đối thủ được đặt bi trắng.
+- **Lịch sử đấu** (lưu trên máy): tổng thắng/thua, thành tích với từng đối thủ và 15 ván gần nhất, xem trong sảnh hoặc bấm ⚙.
+
 ## Điều khiển
 
 - **Ngắm:** chạm hoặc kéo trên bàn. Kéo thanh xoay (bên phải khi xoay ngang, góc dưới bên phải khi cầm dọc) để ngắm tinh.

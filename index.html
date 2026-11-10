@@ -134,6 +134,32 @@
   .pick .petav { font-size: 24px; }
   .upload { display: grid; place-items: center; border-radius: 50%; border: 2px dashed var(--line); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.1; text-align: center; width: 100%; height: 100%; }
   .cueprev { width: 100%; height: 72px; display: block; border-radius: 10px; background: radial-gradient(ellipse at 50% 40%, #222b33, var(--panel)); border: 1px solid var(--line); }
+  .clock {
+    font: 600 11px/1 var(--body); font-variant-numeric: tabular-nums; padding: 3px 6px; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  }
+  .clock.low { background: var(--foul); border-color: var(--foul); color: #fff; animation: pulse .8s ease-in-out infinite; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { min-height: 36px; padding: 6px 12px; border-radius: 18px; font-size: 14px; font-weight: 500; }
+  .chips button[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+  .history { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .history summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; list-style: none; }
+  .history summary::-webkit-details-marker { display: none; }
+  .history summary::after { content: '▾'; color: var(--muted); }
+  .history[open] summary::after { content: '▴'; }
+  .hsum { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hsum b { color: var(--brass); }
+  .hbody { display: grid; gap: 12px; padding: 0 14px 14px; }
+  .hopp { display: flex; flex-wrap: wrap; gap: 6px; }
+  .hopp span { padding: 4px 10px; border-radius: 14px; background: var(--room); border: 1px solid var(--line); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .hlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .hlist li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; font-size: 14px; }
+  .hlist .res { font-weight: 700; font-size: 12px; padding: 2px 7px; border-radius: 6px; background: var(--room); }
+  .hlist .res.w { color: #1b1408; background: var(--brass); }
+  .hlist .why { color: var(--muted); font-size: 12px; }
+  .hlist time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .hempty { margin: 0; color: var(--muted); font-size: 14px; }
+  .hclear { justify-self: start; min-height: 34px; padding: 6px 12px; font-size: 13px; color: var(--muted); }
   .lobby {
     position: fixed; inset: 0; z-index: 50; overflow-y: auto; background: var(--room);
     padding-block: max(20px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
@@ -264,7 +290,7 @@
   <div class="col" id="colL">
     <button class="reset" id="resetBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
     <button class="reset" id="gearBtn" aria-label="Tên, avatar, màu bàn và gậy" title="Tuỳ chỉnh">⚙&#xFE0E;</button>
-    <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><div class="rack" id="rack0"></div></div>
+    <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><span class="clock" id="clock0" hidden></span><div class="rack" id="rack0"></div></div>
     <div class="pull" id="pull" role="slider" tabindex="0" aria-label="Lực đánh — kéo rồi thả để đánh" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="pull-fill" id="pullFill"></div>
       <div class="pull-num" id="powerOut">0</div>
@@ -317,7 +343,7 @@
   </div>
 
   <div class="col" id="colR">
-    <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><div class="rack" id="rack1"></div></div>
+    <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><span class="clock" id="clock1" hidden></span><div class="rack" id="rack1"></div></div>
     <button class="spin" id="spinBtn" aria-label="Điểm chạm cơ vào bi trắng" title="Điểm chạm cơ"><span class="spin-dot" id="spinDot"></span></button>
     <div class="wheel" id="wheel" role="slider" tabindex="0" aria-label="Xoay gậy — kéo để xoay">
       <div class="wheel-icon" aria-hidden="true"><span>↺</span><span>↻</span></div>
@@ -331,6 +357,7 @@
     <p class="lb-note" id="lbNote"></p>
     <div class="field"><label class="lbl" for="lbName">Tên của bạn</label><input id="lbName" maxlength="16" autocomplete="nickname" placeholder="Nhập tên"></div>
     <div class="field"><span class="lbl">Avatar</span><div class="balls" id="lbBalls" role="group" aria-label="Chọn bi làm avatar"></div></div>
+    <div class="field" id="lbTimerField"><span class="lbl">Thời gian mỗi lượt</span><div class="chips" id="lbTimers" role="group" aria-label="Thời gian mỗi lượt"></div></div>
     <div class="field" id="lbFeltField"><span class="lbl">Màu bàn</span><div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div></div>
     <div class="field"><span class="lbl">Gậy</span><canvas class="cueprev" id="cuePrev" aria-label="Xem trước gậy"></canvas><div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div></div>
     <input type="file" id="lbFile" accept="image/*" hidden>
@@ -339,6 +366,14 @@
       <p class="lb-err" id="lbErr" hidden>Mã phòng gồm 4 chữ số.</p>
     </div>
     <button class="primary lb-go" id="lbGo">Bắt đầu</button>
+    <details class="history" id="lbHistory">
+      <summary><span class="lbl">Lịch sử đấu</span><span class="hsum" id="hSum"></span></summary>
+      <div class="hbody">
+        <div class="hopp" id="hOpp"></div>
+        <ol class="hlist" id="hList"></ol>
+        <button class="hclear" id="hClear">Xoá lịch sử</button>
+      </div>
+    </details>
   </div>
 </div>
 
@@ -398,6 +433,9 @@
       cue: CUES[p.cue] ? p.cue : 'maple',
     };
   })();
+  const TIMERS = [[0, 'Không giới hạn'], [15, '15 giây'], [30, '30 giây'], [60, '1 phút'], [120, '2 phút'], [180, '3 phút'], [300, '5 phút']];
+  const validTimer = t => TIMERS.some(([v]) => v === t) ? t : 0;
+  { let t = 0; try { t = +JSON.parse(localStorage.getItem('bida.prefs') || '{}').timer; } catch (e) {} prefs.timer = validTimer(t); }
   const savePrefs = () => { try { localStorage.setItem('bida.prefs', JSON.stringify(prefs)); } catch (e) {} };
   let started = false;
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -441,7 +479,7 @@
       event: { id: rid(), kind: 'start', who: b }, shot: null,
       seats: prev ? { ...prev.seats } : { p0: null, p1: null },
       reset: { p0: false, p1: false }, seq: (prev ? prev.seq : 0) + 1,
-      players: prev ? { ...prev.players } : { p0: null, p1: null }, felt: prev ? prev.felt : 'navy',
+      players: prev ? { ...prev.players } : { p0: null, p1: null }, felt: prev ? prev.felt : 'navy', timer: prev ? prev.timer : 0,
     };
   }
 
@@ -453,6 +491,7 @@
       groups: { ...base.groups, ...(d.groups || {}) }, wins: { ...base.wins, ...(d.wins || {}) },
       players: { ...base.players, ...(d.players || {}) }, felt: FELTS[d.felt] ? d.felt : 'navy',
       streak: d.streak && typeof d.streak === 'object' ? d.streak : { who: -1, n: 0 },
+      timer: validTimer(+d.timer),
       event: d.event || { id: '', kind: 'start', who: 0 },
     };
   }
@@ -491,6 +530,7 @@
   }
 
   function afterState(prev) {
+    if (prev && S.phase === 'over' && prev.phase !== 'over') recordGame();
     // đối phương từ chối yêu cầu xếp lại bàn của mình
     const meSeat = mySeat();
     if (prev && online && meSeat >= 0 && prev.reset['p' + meSeat] && !S.reset['p' + meSeat] && S.event.id === prev.event.id) {
@@ -806,7 +846,7 @@
       await withLock(async () => {
         const snap = await mainRef.get();
         if (snap.exists) return;
-        const ns = freshState(null); ns.seats.p0 = myId; ns.felt = prefs.felt;
+        const ns = freshState(null); ns.seats.p0 = myId; ns.felt = prefs.felt; ns.timer = prefs.timer;
         await mainRef.set(ns);
       });
     } catch (e) { console.warn('create', e); }
@@ -896,7 +936,7 @@
           if (gotState) return;
           gotState = true; online = true; synced = true; creating = false; hideLoading();
           claimIfFree();
-          commit({ felt: prefs.felt });
+          commit({ felt: prefs.felt, timer: prefs.timer });
           showInvite();
         }, 1500);
       });
@@ -1332,18 +1372,18 @@
   $('flair').addEventListener('animationend', () => { $('flair').hidden = true; });
   function celebrate(ev) {
     if (ev.kind === 'win') { confetti(160); setTimeout(() => confetti(110, .2), 500); setTimeout(() => confetti(90, .3), 1100); return; }
-    const fx = ev.fx; if (!fx) { if (ev.kind === 'foul') shake(); return; }
+    const fx = ev.fx; if (!fx || ev.kind === 'timeout') { if (ev.kind === 'foul' || ev.kind === 'timeout') shake(); return; }
     const by = cap(whoName(fx.by));
     if (fx.combo >= 3) { flair('Quá đỉnh! Ăn ' + fx.combo + ' bi'); confetti(110); }
     else if (fx.combo === 2) { flair('Ăn 2 bi một lượt!'); confetti(70); }
     else if (fx.streak) { flair('Chuỗi ' + fx.streak + ' lượt!'); confetti(50); }
     else if (fx.breakpot) { flair('Phá bi đẹp!'); confetti(40); }
     else if (fx.near) { flair('Suýt vào!', true); shake(); }
-    if (ev.kind === 'foul') shake();
+    if (ev.kind === 'foul' || ev.kind === 'timeout') shake();
   }
   const FOUL_TEXT = {
     scratch: 'bi trắng rơi xuống lỗ', miss: 'bi trắng không chạm bi nào', wrong: 'chạm bi của đối thủ trước',
-    need8: 'phải chạm bi 8 trước', early8: 'chạm bi 8 khi chưa có nhóm bi',
+    need8: 'phải chạm bi 8 trước', early8: 'chạm bi 8 khi chưa có nhóm bi', time: 'hết giờ',
   };
   const GROUP_TEXT = { solid: 'bi trơn (1–7)', stripe: 'bi sọc (9–15)' };
   const joinEvent = () => S.isBreak ? { kind: 'start', who: S.cur }
@@ -1358,7 +1398,7 @@
     celebrate(ev);
     const t = $('toast'), fx = ev.fx || {};
     const n = ev.who != null ? whoName(ev.who) : '';
-    const byIdx = fx.by != null ? fx.by : ev.kind === 'foul' && ev.who != null ? 1 - ev.who : null;
+    const byIdx = fx.by != null ? fx.by : (ev.kind === 'foul' || ev.kind === 'timeout') && ev.who != null ? 1 - ev.who : null;
     const by = byIdx != null ? whoName(byIdx) : '';
     const foulCode = fx.foul || (ev.kind === 'foul' ? simFoul : null);
     let main, sub = '', foul = false;
@@ -1379,6 +1419,9 @@
       case 'noroom': main = 'Đang tìm phòng…'; break;
       case 'sent': main = 'Đã gửi yêu cầu xếp lại bàn'; sub = 'Chờ ' + n + ' đồng ý'; break;
       case 'cancel': main = 'Đã huỷ yêu cầu xếp lại bàn'; break;
+      case 'timeout':
+        main = cap(by) + ' hết giờ';
+        sub = cap(n) + ' được đặt bi trắng ' + (S.isBreak ? 'trong vùng đầu bàn' : 'ở bất kỳ đâu'); foul = true; break;
       case 'declined': main = cap(n) + ' không đồng ý xếp lại bàn'; foul = true; break;
       default: return;
     }
@@ -1615,9 +1658,80 @@
         renderUI();
       }
     }
+    updateClock(now);
     render3D(now);
     requestAnimationFrame(loop);
   }
+
+  // ---------- Thời gian mỗi lượt ----------
+  let turnKey = '', turnStart = 0, timedOutKey = '', clockTick = 0;
+  function doTimeout() {
+    const P = S.cur;
+    commit({
+      cur: 1 - P, phase: 'place', shot: null, seq: S.seq + 1, streak: { who: -1, n: 0 },
+      lastFoul: { by: P, code: 'time' }, balls: serialBalls(),
+      event: { id: rid(), kind: 'timeout', who: 1 - P, fx: { by: P, foul: 'time' } },
+    });
+  }
+  function updateClock(now) {
+    // chỉ đếm giờ khi đã đủ hai người (chơi qua mạng) hoặc chơi chung một máy
+    const both = !online || (S.seats.p0 && S.seats.p1);
+    const waiting = (S.phase === 'aim' || S.phase === 'place') && !sim && started && both;
+    const key = waiting ? S.event.id + '|' + S.cur : '';
+    if (key !== turnKey) { turnKey = key; turnStart = now; }
+    if (now - clockTick < 200) return;
+    clockTick = now;
+    const left = S.timer && waiting ? S.timer - (now - turnStart) / 1000 : null;
+    [0, 1].forEach(i => {
+      const c = $('clock' + i), show = left != null && i === S.cur;
+      c.hidden = !show;
+      if (!show) return;
+      const sec = Math.max(0, Math.ceil(left));
+      c.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+      c.classList.toggle('low', sec <= 5);
+    });
+    if (left == null || timedOutKey === key) return;
+    // máy người đang đánh tự xử hết giờ; máy kia chờ thêm 5 giây phòng khi máy đó mất mạng
+    if ((left <= 0 && canAct()) || (left <= -5 && online && mySeat() >= 0)) { timedOutKey = key; doTimeout(); }
+  }
+
+  // ---------- Lịch sử đấu (lưu trên máy này) ----------
+  const loadHistory = () => { try { const h = JSON.parse(localStorage.getItem('bida.history') || '[]'); return Array.isArray(h) ? h : []; } catch (e) { return []; } };
+  const saveHistory = h => { try { localStorage.setItem('bida.history', JSON.stringify(h.slice(-200))); } catch (e) {} };
+  const REASON_TEXT = { clean: 'bi 8 đúng luật', early: 'bi 8 vào sớm', foul8: 'lỗi khi bi 8 rơi' };
+  function recordGame() {
+    const me = mySeat(); if (!online || me < 0) return;
+    const h = loadHistory(), id = S.event.id;
+    if (!id || h.some(g => g.id === id)) return;
+    h.push({ id, t: Date.now(), win: S.winner === me, opp: whoName(1 - me), reason: S.reason, room: roomId || '' });
+    saveHistory(h); renderHistory();
+  }
+  function renderHistory() {
+    const h = loadHistory(), w = h.filter(g => g.win).length;
+    $('hSum').innerHTML = h.length ? `Thắng <b>${w}</b> · Thua ${h.length - w}` : '';
+    const opp = $('hOpp'), list = $('hList'); opp.textContent = ''; list.textContent = '';
+    if (!h.length) { const p = document.createElement('p'); p.className = 'hempty'; p.textContent = 'Chưa có ván nào. Chơi qua mạng xong một ván là ván đó được ghi lại ở đây.'; opp.appendChild(p); $('hClear').hidden = true; return; }
+    $('hClear').hidden = false;
+    const by = {};
+    for (const g of h) { const k = g.opp || 'Người chơi'; by[k] = by[k] || [0, 0]; by[k][g.win ? 0 : 1]++; }
+    Object.entries(by).sort((a, b) => (b[1][0] + b[1][1]) - (a[1][0] + a[1][1])).slice(0, 8).forEach(([name, [a, b]]) => {
+      const sp = document.createElement('span'); sp.textContent = name + ' ' + a + '–' + b; opp.appendChild(sp);
+    });
+    h.slice(-15).reverse().forEach(g => {
+      const li = document.createElement('li');
+      const r = document.createElement('span'); r.className = 'res' + (g.win ? ' w' : ''); r.textContent = g.win ? 'Thắng' : 'Thua';
+      const d = document.createElement('span'); d.textContent = 'với ' + (g.opp || 'Người chơi');
+      const why = document.createElement('span'); why.className = 'why'; why.textContent = REASON_TEXT[g.reason] ? ' · ' + REASON_TEXT[g.reason] : ''; d.appendChild(why);
+      const tm = document.createElement('time'); const dt = new Date(g.t);
+      tm.textContent = dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) + ' ' + dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      li.append(r, d, tm); list.appendChild(li);
+    });
+  }
+  let clearArmed = false;
+  $('hClear').addEventListener('click', () => {
+    if (!clearArmed) { clearArmed = true; $('hClear').textContent = 'Bấm lần nữa để xoá hết'; setTimeout(() => { clearArmed = false; $('hClear').textContent = 'Xoá lịch sử'; }, 3000); return; }
+    saveHistory([]); clearArmed = false; $('hClear').textContent = 'Xoá lịch sử'; renderHistory();
+  });
 
   // ---------- Sảnh: tên, avatar, màu bàn, màu gậy ----------
   let lobbyMode = 'start';
@@ -1677,6 +1791,11 @@
         el.appendChild(b);
       }
     };
+    for (const [v, label] of TIMERS) {
+      const b = document.createElement('button'); b.dataset.k = v; b.textContent = label;
+      b.addEventListener('click', () => { prefs.timer = v; pressList($('lbTimers'), v); });
+      $('lbTimers').appendChild(b);
+    }
     swatch($('lbFelts'), FELTS, 'felt', 'felt');
     swatch($('lbCues'), CUES, 'cue', 'cue');
     $('lbGo').addEventListener('click', lobbyGo);
@@ -1734,6 +1853,9 @@
     pressList($('lbBalls'), avKey(prefs.av)); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
     const canFelt = mode === 'start' ? !invited() : (!online || mySeat() === 0);
     $('lbFeltField').hidden = !canFelt;
+    $('lbTimerField').hidden = !canFelt;
+    pressList($('lbTimers'), mode === 'start' ? prefs.timer : (online ? S.timer : prefs.timer));
+    renderHistory();
     $('lbRoomField').hidden = !(mode === 'start' && window.mqtt && !(window.claude && window.claude.use) && !invited());
     $('lbErr').hidden = true;
     $('lbNote').textContent = mode === 'start' && invited() ? 'Bạn được mời vào một bàn. Màu bàn do người tạo phòng chọn.' : '';
@@ -1747,14 +1869,14 @@
     audio();
     if (lobbyMode === 'start') {
       started = true;
-      if (!hasNet()) { S.felt = prefs.felt; renderUI(); popup(S.event); }
+      if (!hasNet()) { S.felt = prefs.felt; S.timer = prefs.timer; renderUI(); popup(S.event); }
       if (hasNet()) showLoading();
       initOnline().catch(e => console.warn('online', e)).then(() => { if (!mq && !mainRef) hideLoading(); });
     } else if (online) {
       announceMe();
-      if (mySeat() === 0 && S.felt !== prefs.felt) commit({ felt: prefs.felt });
+      if (mySeat() === 0 && (S.felt !== prefs.felt || S.timer !== prefs.timer)) commit({ felt: prefs.felt, timer: prefs.timer });
       else applyFelt(S.felt);
-    } else { S.felt = prefs.felt; renderUI(); }
+    } else { S.felt = prefs.felt; S.timer = prefs.timer; renderUI(); }
   }
   $('gearBtn').addEventListener('click', () => openLobby('settings'));
 
