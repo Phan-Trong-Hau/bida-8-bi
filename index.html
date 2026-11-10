@@ -186,8 +186,8 @@
   const COLORS = { 1: '#f0bf2a', 2: '#1f4fb8', 3: '#d23a2a', 4: '#5b2a86', 5: '#ee7a20', 6: '#1d8a4b', 7: '#7a1f24', 8: '#141414' };
   const colorOf = n => COLORS[n > 8 ? n - 8 : n];
   const POCKETS = [
-    { x: -5, y: -5, r: 25 }, { x: W / 2, y: -12, r: 23 }, { x: W + 5, y: -5, r: 25 },
-    { x: -5, y: H + 5, r: 25 }, { x: W / 2, y: H + 12, r: 23 }, { x: W + 5, y: H + 5, r: 25 },
+    { x: -4, y: -4, r: 20 }, { x: W / 2, y: -7, r: 19 }, { x: W + 4, y: -4, r: 20 },
+    { x: -4, y: H + 4, r: 20 }, { x: W / 2, y: H + 7, r: 19 }, { x: W + 4, y: H + 4, r: 20 },
   ];
   const HEAD = { x: W * 0.25, y: H / 2 }, FOOT = { x: W * 0.73, y: H / 2 };
 
@@ -284,8 +284,16 @@
   }
 
   // ---------- Vật lý ----------
-  const inMouthX = x => x < 26 || x > W - 26 || Math.abs(x - W / 2) < 22;
-  const inMouthY = y => y < 26 || y > H - 26;
+  // Miệng lỗ rộng rãi: bi chạm mép lỗ vẫn vào, không bật ra
+  const CORNER_M = 36, SIDE_M = 28;
+  const inMouthX = x => x < CORNER_M || x > W - CORNER_M || Math.abs(x - W / 2) < SIDE_M;
+  const inMouthY = y => y < CORNER_M || y > H - CORNER_M;
+  function inPocket(b) {
+    const cx = Math.min(b.x, W - b.x), cy = Math.min(b.y, H - b.y);
+    if (cx + cy < 32) return true;
+    if (Math.abs(b.x - W / 2) < SIDE_M && cy < R * 0.5) return true;
+    return b.x < -R || b.x > W + R || b.y < -R || b.y > H + R;
+  }
 
   function pot(b) {
     b.on = false; b.vx = b.vy = 0;
@@ -315,8 +323,7 @@
       if (b.y > H - R && !inMouthX(b.x)) { b.y = H - R; b.vy = -b.vy * 0.78; }
       if (b.x < R && !inMouthY(b.y)) { b.x = R; b.vx = -b.vx * 0.78; }
       if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; b.vx = -b.vx * 0.78; }
-      if (POCKETS.some(p => Math.hypot(b.x - p.x, b.y - p.y) < p.r) ||
-          b.x < -R || b.x > W + R || b.y < -R || b.y > H + R) { pot(b); continue; }
+      if (inPocket(b)) { pot(b); continue; }
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > 0) {
         const ns = sp - (0.045 + sp * 0.008) * dt;
@@ -554,9 +561,9 @@
   scene.add(lamp);
 
   const stdMat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, ...o });
-  const feltM = stdMat(0x17668f, { roughness: .95 }), cushionM = stdMat(0x11506f, { roughness: .9 });
-  const woodM = stdMat(0x6a3f22, { roughness: .45 }), woodDarkM = stdMat(0x3a2112, { roughness: .6 });
-  const ivoryM = stdMat(0xe9d9a8, { roughness: .4 }), blackM = new THREE.MeshBasicMaterial({ color: 0x040404 });
+  const feltM = stdMat(0x0d5c45, { roughness: .95 }), cushionM = stdMat(0x09473a, { roughness: .9 });
+  const woodM = stdMat(0x4b1c12, { roughness: .28 }), woodDarkM = stdMat(0x26100a, { roughness: .5 });
+  const ivoryM = stdMat(0xd4af5f, { roughness: .3, metalness: .45 }), blackM = new THREE.MeshBasicMaterial({ color: 0x040404 });
 
   function box(x0, x1, z0, z1, y0, y1, m, shadow = true) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), m);
@@ -567,11 +574,11 @@
   // mặt nỉ, băng, thành gỗ, thân bàn
   box(-CU, W + CU, -CU, H + CU, -4, 0, feltM, false);
   for (const [z0, z1] of [[-CU, 0], [H, H + CU]]) {
-    box(26, W / 2 - 22, z0, z1, 0, CUSH_H, cushionM);
-    box(W / 2 + 22, W - 26, z0, z1, 0, CUSH_H, cushionM);
+    box(CORNER_M, W / 2 - SIDE_M, z0, z1, 0, CUSH_H, cushionM);
+    box(W / 2 + SIDE_M, W - CORNER_M, z0, z1, 0, CUSH_H, cushionM);
   }
-  box(-CU, 0, 26, H - 26, 0, CUSH_H, cushionM);
-  box(W, W + CU, 26, H - 26, 0, CUSH_H, cushionM);
+  box(-CU, 0, CORNER_M, H - CORNER_M, 0, CUSH_H, cushionM);
+  box(W, W + CU, CORNER_M, H - CORNER_M, 0, CUSH_H, cushionM);
   const E = CU + RW;
   box(-E, W + E, -E, -CU, 0, RAIL_H, woodM);
   box(-E, W + E, H + CU, H + E, 0, RAIL_H, woodM);
@@ -580,8 +587,10 @@
   box(-E - 6, W + E + 6, -E - 6, H + E + 6, -110, -4, woodDarkM, false);
   // lỗ
   for (const p of POCKETS) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r + 2, p.r + 2, RAIL_H + 1, 28), blackM);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, RAIL_H + 1, 32), blackM);
     m.position.copy(T(p.x, p.y, (RAIL_H + 1) / 2 - 0.5)); scene.add(m);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(p.r + 1, 1.6, 8, 40), ivoryM);
+    rim.rotation.x = Math.PI / 2; rim.position.copy(T(p.x, p.y, RAIL_H + .6)); scene.add(rim);
   }
   // diamond trên thành bàn, điểm chân bàn
   const dotGeo = new THREE.CircleGeometry(3.2, 12);
@@ -590,7 +599,7 @@
   };
   for (let i = 1; i < 8; i++) if (i !== 4) { addDot(W / 8 * i, -CU - RW / 2); addDot(W / 8 * i, H + CU + RW / 2); }
   for (let i = 1; i < 4; i++) { addDot(-CU - RW / 2, H / 4 * i); addDot(W + CU + RW / 2, H / 4 * i); }
-  addDot(FOOT.x, FOOT.y, .2, new THREE.MeshBasicMaterial({ color: 0x8fc3dc }));
+  addDot(FOOT.x, FOOT.y, .2, new THREE.MeshBasicMaterial({ color: 0x7fbf9f }));
 
   // bi
   function ballTexture(n) {
