@@ -24,7 +24,9 @@
     --body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
     color-scheme: dark;
   }
+  [hidden] { display: none !important; }
   html { height: 100%; box-sizing: border-box; }
+  body { margin: 0; }
   html, body { background: var(--room); color: var(--ink); }
   body { height: 100%; overflow: hidden; overscroll-behavior: none; font-family: var(--body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
   .app {
@@ -149,6 +151,11 @@
   .card h2 { margin: 0; font-family: var(--display); font-size: 28px; text-transform: uppercase; letter-spacing: .04em; color: var(--brass); }
   .card .row { display: flex; gap: 10px; }
   .card .avatar { width: 46px; height: 46px; }
+  .card .note { margin: 0; color: var(--muted); font-size: 13px; }
+  .card input {
+    width: 100%; min-width: 0; box-sizing: border-box; font: inherit; font-size: 13px; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--line); background: var(--room); color: var(--ink);
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .avatar { transition: none; }
@@ -171,6 +178,14 @@
   <div class="table-wrap" id="tableWrap">
     <canvas id="table" aria-label="Bàn bida"></canvas>
     <div class="toast" id="toast" hidden></div>
+    <div class="modal" id="invite" hidden>
+      <div class="card">
+        <h2>Mời bạn chơi</h2>
+        <p class="note">Gửi link này cho bạn của bạn. Họ mở là vào bàn.</p>
+        <input id="inviteLink" readonly aria-label="Link phòng">
+        <div class="row"><button id="closeInvite">Đóng</button><button class="primary" id="copyBtn">Gửi link</button></div>
+      </div>
+    </div>
     <div class="modal" id="spinPick" hidden>
       <div class="spin-big" id="spinBig" role="slider" aria-label="Kéo chấm để chọn điểm chạm cơ"><span class="spin-dot" id="spinBigDot"></span></div>
     </div>
@@ -200,6 +215,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 (() => {
   const W = 1000, H = 500, RAIL = 46, R = 11;
@@ -295,7 +311,7 @@
     if (online && mainRef) {
       const p = JSON.parse(JSON.stringify(patch));
       writeQ = writeQ.then(() => mainRef.update(p)).catch(e => console.warn('db write', e));
-    }
+    } else if (online && peerConn) peerSend({ t: 'patch', p: JSON.parse(JSON.stringify(patch)) });
   }
 
   function afterState(prev) {
@@ -540,7 +556,9 @@
   // ---------- Đồng bộ online ----------
   function onRemote(snap) {
     if (!snap.exists) return;
-    const d = normalize(snap.data());
+    applyRemote(normalize(snap.data()));
+  }
+  function applyRemote(d) {
     if (synced && d.seq < S.seq) return;
     synced = true;
     const prev = S; S = d;
@@ -552,7 +570,7 @@
     }
     afterState(prev);
     refreshProfiles();
-    if (canWrite !== false && mySeat() < 0 && (!S.seats.p0 || !S.seats.p1)) claimSeat();
+    if (mainRef && canWrite !== false && mySeat() < 0 && (!S.seats.p0 || !S.seats.p1)) claimSeat();
   }
 
   async function withLock(fn) {
@@ -609,7 +627,7 @@
   }
 
   async function initOnline() {
-    if (!window.claude || !window.claude.use) return;
+    if (!window.claude || !window.claude.use) return initP2P();
     const db = await window.claude.use('db');
     if (!db) return;
     userCap = await window.claude.use('user');
@@ -630,6 +648,82 @@
       onRemote(snap);
     }, e => console.warn('db', e));
   }
+
+  // ---------- Chơi qua link (GitHub Pages): nối trực tiếp 2 máy bằng PeerJS ----------
+  // Người mở link đầu tiên tạo phòng (ghế 1), link có #r-<mã phòng>; người mở link đó vào ghế 2.
+  let peer = null, peerConn = null, isHost = false;
+  const ROOM_PREFIX = 'bida8-';
+  function peerSend(msg) { try { if (peerConn && peerConn.open) peerConn.send(msg); } catch (e) { console.warn('p2p', e); } }
+  const roomLink = () => location.href.split('#')[0] + '#r-' + roomId;
+  let roomId = null;
+  function initP2P() {
+    if (!window.Peer) return;
+    const m = location.hash.match(/^#r-([a-z0-9]+)$/);
+    let hosted = null; try { hosted = localStorage.getItem('bida.hostRoom'); } catch (e) {}
+    if (m && m[1] !== hosted) joinRoom(m[1]); else hostRoom(m ? m[1] : rid(), 0);
+  }
+  function onPeerData(msg) {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.t === 'full') {
+      synced = false; applyRemote(normalize(msg.s));
+      popup({ kind: S.phase === 'place' ? 'foul' : 'turn', who: S.cur });
+    } else if (msg.t === 'patch' && msg.p) applyRemote(normalize(merge(S, msg.p)));
+  }
+  function hostRoom(id, tries) {
+    isHost = true; myId = 'host'; roomId = id;
+    try { localStorage.setItem('bida.hostRoom', id); } catch (e) {}
+    history.replaceState(null, '', '#r-' + id);
+    peer = new Peer(ROOM_PREFIX + id);
+    peer.on('open', () => {
+      online = true; synced = true;
+      commit({ seats: { p0: 'host' } });
+      if (!S.seats.p1) showInvite();
+    });
+    peer.on('connection', conn => {
+      if (peerConn && peerConn.open) { conn.on('open', () => conn.close()); return; }
+      peerConn = conn;
+      conn.on('open', () => {
+        const prev = S; S = merge(S, { seats: { p1: 'guest' } }); afterState(prev);
+        conn.send({ t: 'full', s: S });
+        $('invite').hidden = true; popup({ kind: 'joined' });
+      });
+      conn.on('data', onPeerData);
+      conn.on('close', () => { if (peerConn === conn) { peerConn = null; popup({ kind: 'left' }); } });
+    });
+    peer.on('error', e => {
+      // tải lại trang: mã phòng cũ có thể còn giữ vài giây, thử lại
+      if (e.type === 'unavailable-id' && tries < 6) { peer.destroy(); setTimeout(() => hostRoom(id, tries + 1), 2500); }
+      else console.warn('peer', e);
+    });
+  }
+  function joinRoom(id) {
+    myId = 'guest'; roomId = id;
+    peer = new Peer();
+    const connect = () => {
+      const conn = peer.connect(ROOM_PREFIX + id, { reliable: true });
+      conn.on('open', () => { peerConn = conn; online = true; });
+      conn.on('data', onPeerData);
+      conn.on('close', () => { if (peerConn === conn) { peerConn = null; popup({ kind: 'left' }); setTimeout(connect, 2000); } });
+    };
+    peer.on('open', connect);
+    peer.on('error', e => {
+      if (e.type === 'peer-unavailable') { popup({ kind: 'noroom' }); setTimeout(connect, 3000); }
+      else console.warn('peer', e);
+    });
+  }
+  function showInvite() {
+    $('inviteLink').value = roomLink();
+    $('invite').hidden = false;
+  }
+  $('closeInvite').addEventListener('click', () => { $('invite').hidden = true; });
+  $('copyBtn').addEventListener('click', async () => {
+    const url = roomLink();
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Bida 8 Bi', url }); return; }
+      await navigator.clipboard.writeText(url); $('copyBtn').textContent = 'Đã copy';
+    } catch (e) { $('inviteLink').select(); }
+  });
+  $('who1').addEventListener('click', () => { if (isHost && !S.seats.p1) showInvite(); });
 
   // ---------- Vẽ 3D (Three.js) ----------
   // Toạ độ vật lý (x, y) trên mặt bàn → thế giới 3D (x - W/2, cao, y - H/2)
@@ -918,6 +1012,9 @@
       case 'again': text = cap(n) + ' đánh tiếp'; break;
       case 'foul': text = 'Lỗi · ' + cap(n) + ' đặt bi cái'; foul = true; break;
       case 'bad': text = 'Không đặt được'; foul = true; break;
+      case 'joined': text = 'Người 2 đã vào bàn'; break;
+      case 'left': text = 'Mất kết nối'; foul = true; break;
+      case 'noroom': text = 'Đang tìm phòng…'; break;
       default: return;
     }
     t.textContent = text;

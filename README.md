@@ -2,7 +2,13 @@
 
 Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điện thoại, cho 2 người chơi.
 
-## Hai chế độ
+## Chơi ngay
+
+**https://phan-trong-hau.github.io/bida-8-bi/**: mở link, bấm “Gửi link” để mời bạn. Người mở link mời sẽ vào ghế 2.
+
+## Các chế độ
+
+- **Qua link GitHub Pages:** hai máy nối thẳng với nhau bằng [PeerJS](https://peerjs.com/) (WebRTC), không cần tài khoản. Người mở trang trước tạo phòng (ghế 1), link có dạng `.../#r-<mã phòng>`; ai mở link đó vào ghế 2. Chỉ người tới lượt mới đánh được, xếp lại bàn cần cả hai đồng ý.
 
 - **Online (khi mở qua link claude.ai):** mỗi người chơi trên máy của mình. Người mở trước ngồi ghế 1, người thứ hai ngồi ghế 2, ai mở sau nữa chỉ được xem. Chỉ người tới lượt mới ngắm, kéo lực và đánh được. Người còn lại xem bi chạy trực tiếp. Xếp lại bàn hoặc chơi ván mới cần **cả hai đồng ý**. Trạng thái bàn được lưu bằng capability `db` của artifact (`tables/main`).
 - **Chung một máy (mở `index.html` trực tiếp):** hai người thay phiên trên cùng một máy.
