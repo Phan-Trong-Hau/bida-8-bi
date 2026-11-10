@@ -539,7 +539,7 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setClearColor(0x121619, 1);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(36, 1, 10, 9000);
+  const camera = new THREE.PerspectiveCamera(24, 1, 10, 12000);
 
   scene.add(new THREE.HemisphereLight(0xe4edf5, 0x2a1a10, 0.5));
   const sun = new THREE.DirectionalLight(0xfff2dc, 0.9);
@@ -725,7 +725,8 @@
 
   function fitCamera(w, h) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
-    const dir = (vert ? new V3(-1, 2.4, 0) : new V3(0, 1.8, 1)).normalize();
+    // Nhìn gần thẳng từ trên xuống (nghiêng ~10°) để bàn vuông vức, vẫn giữ chiều sâu 3D
+    const dir = (vert ? new V3(-1, 6, 0) : new V3(0, 6, 1)).normalize();
     const corners = [];
     for (const x of [-E, W + E]) for (const z of [-E, H + E]) for (const y of [0, RAIL_H]) corners.push(T(x, z, y));
     let lo = 200, hi = 8000;
