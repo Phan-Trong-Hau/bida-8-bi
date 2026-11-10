@@ -22,3 +22,7 @@ Trò chơi bida 8 bi 3D (Three.js) chạy trên trình duyệt, ưu tiên điệ
 - **Lỗi** (đối thủ được đặt bi cái ở bất kỳ đâu, kéo đổi chỗ bao nhiêu lần cũng được cho tới khi đánh): bi cái rơi xuống lỗ, bi cái không chạm bi nào, hoặc chạm bi của nhóm khác trước.
 - Sạch nhóm rồi đưa bi 8 vào lỗ đúng luật → **thắng**. Đưa bi 8 vào lỗ sớm hoặc kèm lỗi → **thua**.
 - Bi 8 rơi khi phá bàn được đặt lại vào điểm chân bàn. Hai người luân phiên phá bàn qua mỗi ván.
+
+## Âm thanh
+
+Tiếng bi va bi, cơ đánh, chạm băng và rơi lỗ là ghi âm thật từ bộ **Pool And Billiards SFX** của SURAJ KISPOTTA (giấy phép CC0, xem `sounds/LICENSE-sounds.txt`). Các file trong `sounds/` đã được chuyển sang mono 16-bit và cắt khoảng lặng, rồi nhúng sẵn vào `index.html` dưới dạng base64 nên game không cần tải file ngoài.
