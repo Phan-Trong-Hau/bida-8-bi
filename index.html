@@ -725,8 +725,9 @@
 
   function fitCamera(w, h) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
-    // Nhìn gần thẳng từ trên xuống (nghiêng ~10°) để bàn vuông vức, vẫn giữ chiều sâu 3D
-    const dir = (vert ? new V3(-1, 6, 0) : new V3(0, 6, 1)).normalize();
+    // Nhìn thẳng từ trên xuống để bàn vuông vức; chiều sâu 3D đến từ ánh sáng, bóng đổ và bi
+    const dir = new V3(0, 1, 0);
+    if (vert) camera.up.set(1, 0, 0); else camera.up.set(0, 0, -1);
     const corners = [];
     for (const x of [-E, W + E]) for (const z of [-E, H + E]) for (const y of [0, RAIL_H]) corners.push(T(x, z, y));
     let lo = 200, hi = 8000;
