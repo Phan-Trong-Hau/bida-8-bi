@@ -306,6 +306,50 @@
     renderUI();
   }
 
+  // ---------- Âm thanh (Web Audio, tự tổng hợp) ----------
+  let actx = null, noiseBuf = null, sndWindow = 0, sndCount = 0;
+  function audio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+      actx = new AC();
+      const len = actx.sampleRate * .5; noiseBuf = actx.createBuffer(1, len, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (actx.state === 'suspended') actx.resume().catch(() => {});
+    return actx;
+  }
+  // trình duyệt chỉ cho phát tiếng sau lần chạm đầu tiên
+  window.addEventListener('pointerdown', () => audio(), { capture: true });
+  function canPlay() {
+    if (!actx || actx.state !== 'running') return false;
+    const t = performance.now(); if (t - sndWindow > 40) { sndWindow = t; sndCount = 0; }
+    return ++sndCount <= 4;
+  }
+  function tone(freq, dur, vol, type, freqEnd, delay = 0) {
+    const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + .02);
+  }
+  function noise(dur, vol, type, freq, q = 1, delay = 0) {
+    const t = actx.currentTime + delay, s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    s.buffer = noiseBuf; f.type = type; f.frequency.value = freq; f.Q.value = q;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(actx.destination); s.start(t, Math.random() * .3); s.stop(t + dur + .02);
+  }
+  const sfx = {
+    click(v) { const a = Math.min(1, v / 18); if (a < .03 || !canPlay()) return; tone(3000 + Math.random() * 700, .05, .55 * a, 'sine'); noise(.03, .5 * a, 'highpass', 2600); },
+    cushion(v) { const a = Math.min(1, v / 20); if (a < .06 || !canPlay()) return; tone(150, .1, .55 * a, 'sine', 70); noise(.07, .3 * a, 'lowpass', 650); },
+    pocket() {
+      if (!canPlay()) return;
+      tone(120, .28, .6, 'sine', 55); tone(210, .14, .3, 'triangle', 110);
+      for (let i = 0; i < 4; i++) noise(.05, .22 / (i + 1), 'bandpass', 800 + i * 350, 5, .07 + i * .065);
+    },
+    cue(p) { if (!canPlay()) return; const a = .35 + .65 * p; tone(950, .04, .4 * a, 'triangle', 480); noise(.03, .35 * a, 'bandpass', 1900, 2); },
+  };
+  const sinking = {}; // hiệu ứng bi đang rơi xuống lỗ
+
   // ---------- Vật lý ----------
   // Miệng lỗ rộng rãi: bi chạm mép lỗ vẫn vào, không bật ra
   const CORNER_M = 17, SIDE_M = 17;
@@ -319,6 +363,9 @@
   }
 
   function pot(b) {
+    const p = POCKETS.reduce((m, q) => Math.hypot(b.x - q.x, b.y - q.y) < Math.hypot(b.x - m.x, b.y - m.y) ? q : m);
+    sinking[b.n] = { x: b.x, y: b.y, px: p.x, py: p.y, t0: performance.now() };
+    sfx.pocket();
     b.on = false; b.vx = b.vy = 0;
     if (b.n === 0) shotRec.scratch = true; else shotRec.potted.push(b.n);
   }
@@ -346,6 +393,7 @@
       if (dvn <= 0) continue;
       const imp = dvn * (1 + 0.95) / 2;
       a.vx -= imp * nx; a.vy -= imp * ny; b.vx += imp * nx; b.vy += imp * ny;
+      sfx.click(imp);
       if (shotRec.firstHit == null && (a.n === 0 || b.n === 0)) {
         const c = a.n === 0 ? a : b;
         shotRec.firstHit = a.n === 0 ? b.n : a.n;
@@ -356,10 +404,10 @@
     }
     for (const b of act) {
       if (!b.on) continue;
-      if (b.y < R && !inMouthX(b.x)) { b.y = R; railSpin(b, 'y'); b.vy = -b.vy * 0.78; }
-      if (b.y > H - R && !inMouthX(b.x)) { b.y = H - R; railSpin(b, 'y'); b.vy = -b.vy * 0.78; }
-      if (b.x < R && !inMouthY(b.y)) { b.x = R; railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
-      if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
+      if (b.y < R && !inMouthX(b.x)) { b.y = R; sfx.cushion(Math.abs(b.vy)); railSpin(b, 'y'); b.vy = -b.vy * 0.78; }
+      if (b.y > H - R && !inMouthX(b.x)) { b.y = H - R; sfx.cushion(Math.abs(b.vy)); railSpin(b, 'y'); b.vy = -b.vy * 0.78; }
+      if (b.x < R && !inMouthY(b.y)) { b.x = R; sfx.cushion(Math.abs(b.vx)); railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
+      if (b.x > W - R && !inMouthY(b.y)) { b.x = W - R; sfx.cushion(Math.abs(b.vx)); railSpin(b, 'x'); b.vx = -b.vx * 0.78; }
       if (inPocket(b)) { pot(b); continue; }
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > 0) {
@@ -390,6 +438,7 @@
     shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false,
       spin: shot.spin || { x: 0, y: 0 }, dir: { x: Math.cos(shot.aim), y: Math.sin(shot.aim) }, rails: 0 };
     sim = { id: shot.id, mine };
+    sfx.cue(shot.power);
     lastShotId = shot.id;
     clearTimeout(fallbackTimer);
   }
@@ -639,9 +688,17 @@
   slab(railShape, 0, RAIL_H, woodM, 3);
   slab(roundRectShape(-E - 4, -E - 4, W + E + 4, H + E + 4, 42), -110, 104, woodDarkM, 4);
   // lỗ
+  // lỗ: đĩa tối dần vào tâm, vẽ đè lên nỉ và gỗ; bi vẽ sau nên lăn được vào miệng lỗ
+  const pocketM = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'), grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, '#000'); grad.addColorStop(.7, '#040404'); grad.addColorStop(.9, '#121212'); grad.addColorStop(1, '#262321');
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, depthWrite: false });
+  })();
   for (const p of POCKETS) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, RAIL_H + 5, 32), blackM);
-    m.position.copy(T(p.x, p.y, (RAIL_H + 5) / 2 - 0.5)); scene.add(m);
+    const m = new THREE.Mesh(new THREE.CircleGeometry(p.r, 40), pocketM);
+    m.rotation.x = -Math.PI / 2; m.position.copy(T(p.x, p.y, .5)); m.renderOrder = 1; scene.add(m);
   }
   // diamond trên thành bàn, điểm chân bàn
   const dotGeo = new THREE.CircleGeometry(3.2, 12);
@@ -671,15 +728,31 @@
   const faceUp = new THREE.Quaternion().setFromUnitVectors(new V3(0, 0, 1), new V3(0, 1, 0));
   for (let n = 0; n <= 15; n++) {
     const m = new THREE.Mesh(ballGeo, new THREE.MeshPhongMaterial({ map: ballTexture(n), shininess: 90, specular: 0x555555 }));
-    m.castShadow = true; m.quaternion.copy(faceUp); m.userData.last = null;
+    m.castShadow = true; m.quaternion.copy(faceUp); m.userData.last = null; m.renderOrder = 2;
     scene.add(m); ballMeshes[n] = m;
   }
   const rollAxis = new V3(), rollQ = new THREE.Quaternion();
   function syncBalls() {
+    const now = performance.now();
+    const restore = m => { m.scale.setScalar(1); m.material.color.setScalar(1); m.material.depthTest = true; m.renderOrder = 2; };
     for (const b of balls) {
       const m = ballMeshes[b.n];
-      m.visible = b.on;
-      if (!b.on) { m.userData.last = null; continue; }
+      if (!b.on) {
+        m.userData.last = null;
+        const s = sinking[b.n], age = s ? (now - s.t0) / 420 : 2;
+        if (age < 1) {
+          // trượt vào tâm lỗ, nhỏ và tối dần như đang chìm xuống
+          const e = Math.min(1, age * 1.6);
+          m.visible = true;
+          m.position.copy(T(s.x + (s.px - s.x) * e, s.y + (s.py - s.y) * e, R - R * 1.2 * age * age));
+          m.scale.setScalar(1 - .4 * age);
+          m.material.color.setScalar(1 - .8 * age);
+          m.material.depthTest = false; m.renderOrder = 4;
+        } else { m.visible = false; if (s) { delete sinking[b.n]; restore(m); } }
+        continue;
+      }
+      if (m.renderOrder === 4) restore(m);
+      m.visible = true;
       const L = m.userData.last;
       if (L) {
         const dx = b.x - L.x, dz = b.y - L.y, d = Math.hypot(dx, dz);
@@ -696,7 +769,7 @@
   function stickPart(from, to, r1, r2, color) {
     const len = to - from;
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 18), stdMat(color, { roughness: .35 }));
-    m.rotation.z = -Math.PI / 2; m.position.x = -(from + len / 2); m.castShadow = true; stickInner.add(m);
+    m.rotation.z = -Math.PI / 2; m.position.x = -(from + len / 2); m.castShadow = true; m.renderOrder = 3; stickInner.add(m);
   }
   stickPart(0, 4, 2.5, 2.6, 0x3f8fc0);
   stickPart(4, 14, 2.6, 2.7, 0xf4f1e8);
