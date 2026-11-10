@@ -54,13 +54,12 @@
   .status.foul { color: #f3c3b8; }
 
   .stage { display: flex; justify-content: center; align-items: stretch; gap: 6px; }
-  .land .pull { order: -1; }
-  .land .controls, .land .fine { flex-direction: column; justify-content: center; }
+  .pull { order: -1; }
   .table-wrap { position: relative; flex: none; }
   canvas { display: block; touch-action: none; border-radius: 12px; cursor: crosshair; max-width: 100%; }
 
   .pull {
-    position: relative; flex: none; width: 54px; border-radius: 12px; overflow: hidden;
+    position: relative; flex: none; width: 46px; border-radius: 12px; overflow: hidden;
     background:
       repeating-linear-gradient(to bottom, transparent 0 calc(10% - 1px), rgba(255,255,255,.08) calc(10% - 1px) 10%),
       var(--panel);
@@ -80,8 +79,21 @@
   .pull-label b { font-family: var(--display); font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .pull-arrow { position: absolute; top: 8px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 18px; pointer-events: none; }
 
-  .controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-  .fine { display: flex; align-items: center; gap: 6px; }
+  .side { display: flex; flex-direction: column; gap: 6px; flex: none; width: 46px; }
+  .wheel {
+    position: relative; flex: 1; border-radius: 12px; border: 1px solid var(--line);
+    background: repeating-linear-gradient(to bottom, var(--panel) 0 7px, var(--line) 7px 9px);
+    touch-action: none; cursor: ns-resize; user-select: none;
+  }
+  .wheel.off { opacity: .4; cursor: not-allowed; }
+  .wheel:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+  .wheel-icon {
+    position: absolute; inset: 0; padding: 6px 0; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    color: var(--muted); font-size: 18px;
+  }
+  .wheel-icon span { background: var(--panel); border-radius: 50%; width: 26px; height: 26px; display: grid; place-items: center; }
+  .reset { flex: none; width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); }
   button {
     font: inherit; font-weight: 600; border-radius: 8px; padding: 9px 14px; cursor: pointer; min-height: 42px;
     border: 1px solid var(--line); background: var(--panel); color: var(--ink); touch-action: manipulation;
@@ -111,6 +123,7 @@
 
 <div class="app" id="app">
   <section class="bar" aria-label="Người chơi">
+    <button class="reset" id="newBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
     <div class="who" id="p0"><div class="avatar" title="Người 1">1<span class="wins" id="wins0">0</span></div><div class="rack" id="rack0"></div></div>
     <p class="status" id="status" role="status"></p>
     <div class="who right" id="p1"><div class="avatar" title="Người 2">2<span class="wins" id="wins1">0</span></div><div class="rack" id="rack1"></div></div>
@@ -133,14 +146,11 @@
       <div class="pull-arrow" aria-hidden="true">⇣</div>
       <div class="pull-label"><b id="powerOut">0%</b></div>
     </div>
-  </div>
-
-  <div class="controls" id="controls">
-    <div class="fine">
-      <button class="icon" id="rotL" aria-label="Xoay gậy ngược chiều kim đồng hồ">↺</button>
-      <button class="icon" id="rotR" aria-label="Xoay gậy theo chiều kim đồng hồ">↻</button>
+    <div class="side" id="side">
+      <div class="wheel" id="wheel" role="slider" tabindex="0" aria-label="Xoay gậy — kéo lên hoặc xuống">
+        <div class="wheel-icon" aria-hidden="true"><span>↺</span><span>↻</span></div>
+      </div>
     </div>
-    <button id="newBtn">Xếp lại bàn</button>
   </div>
 </div>
 
@@ -188,15 +198,12 @@
     LW = vert ? CH : CW; LH = vert ? CW : CH;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(LW * dpr); canvas.height = Math.round(LH * dpr);
-    const stage = $('stage'), controls = $('controls'), app = $('app');
-    app.classList.toggle('land', !vert);
-    if (!vert && controls.parentNode !== stage) stage.appendChild(controls);
-    if (vert && controls.parentNode !== app) app.appendChild(controls);
-    const pullW = pull.getBoundingClientRect().width || 54;
-    const sideW = vert ? 0 : controls.getBoundingClientRect().width + 6;
+    const stage = $('stage');
+    const pullW = pull.getBoundingClientRect().width || 46;
+    const sideW = ($('side').getBoundingClientRect().width || 46) + 6;
     const availW = stage.clientWidth - pullW - 6 - sideW;
     const top = stage.getBoundingClientRect().top + window.scrollY;
-    const below = vert ? controls.getBoundingClientRect().height + 12 : 8;
+    const below = 8;
     const availH = Math.max(200, window.innerHeight - top - below);
     const ratio = LW / LH;
     const w = Math.max(160, Math.min(availW, availH * ratio));
@@ -509,6 +516,7 @@
     });
     const st = $('status'); st.textContent = msg; st.classList.toggle('foul', msgFoul);
     pull.classList.toggle('off', state !== 'aim');
+    $('wheel').classList.toggle('off', state !== 'aim');
   }
 
   function toPlay(e) {
@@ -563,20 +571,22 @@
     if (e.key === 'Enter' || e.key === ' ') { shoot(); e.preventDefault(); e.stopPropagation(); }
   });
 
-  // Ngắm tinh: nhấn một lần hoặc giữ để xoay liên tục
-  function holdRotate(btn, dir) {
-    let timer = null, delay = null;
-    const stop = () => { clearInterval(timer); clearTimeout(delay); timer = delay = null; };
-    btn.addEventListener('pointerdown', e => {
-      if (state !== 'aim') return;
-      e.preventDefault(); aim += dir * 0.003;
-      delay = setTimeout(() => { timer = setInterval(() => { aim += dir * 0.006; }, 30); }, 300);
-    });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => btn.addEventListener(t, stop));
-    btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { aim += dir * 0.003; e.preventDefault(); } });
-  }
-  holdRotate($('rotL'), -1);
-  holdRotate($('rotR'), 1);
+  // Thanh xoay bên phải: kéo xuống xoay theo chiều kim đồng hồ, kéo lên xoay ngược lại
+  const wheel = $('wheel');
+  let wheelY = null, wheelOff = 0;
+  wheel.addEventListener('pointerdown', e => {
+    if (state !== 'aim') return;
+    wheel.setPointerCapture(e.pointerId); wheelY = e.clientY; e.preventDefault();
+  });
+  wheel.addEventListener('pointermove', e => {
+    if (wheelY == null) return;
+    const d = e.clientY - wheelY; wheelY = e.clientY;
+    aim += d * 0.0025; wheelOff += d; wheel.style.backgroundPositionY = wheelOff + 'px';
+  });
+  ['pointerup', 'pointercancel'].forEach(t => wheel.addEventListener(t, () => { wheelY = null; }));
+  wheel.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { aim += (e.key === 'ArrowDown' ? 1 : -1) * 0.004; e.preventDefault(); e.stopPropagation(); }
+  });
 
   $('newBtn').addEventListener('click', newGame);
   $('againBtn').addEventListener('click', newGame);

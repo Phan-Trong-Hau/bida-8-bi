@@ -15,9 +15,11 @@ python3 -m http.server 8000
 
 Giao diện ưu tiên điện thoại: khi cầm máy dọc, bàn được xoay đứng cho to (đầu bàn phá bi ở phía dưới).
 
-- **Ngắm:** chạm hoặc kéo trên bàn. Dùng nút ↺ / ↻ để ngắm tinh (giữ để xoay liên tục).
-- **Lực:** kéo thanh lực xuống (bên phải bàn khi cầm dọc, bên trái khi xoay ngang), kéo tới đâu lực tới đó, thả tay là đánh. Kéo ngược về 0 rồi thả để huỷ. Mỗi lượt lực bắt đầu lại từ 0.
+- **Ngắm:** chạm hoặc kéo trên bàn. Kéo thanh xoay bên phải lên/xuống để ngắm tinh.
+- **Lực:** kéo thanh lực bên trái bàn xuống, kéo tới đâu lực tới đó, thả tay là đánh. Kéo ngược về 0 rồi thả để huỷ. Mỗi lượt lực bắt đầu lại từ 0.
 - **Chuột:** rê để ngắm; nhấn giữ trên bàn và kéo ra xa để lấy lực, thả để đánh. Phím `←`/`→` ngắm tinh, `↑`/`↓` chỉnh lực, `Space` đánh.
+
+- Nút ⟲ ở góc trên bên trái để xếp lại bàn.
 
 ## Luật (rút gọn)
 
