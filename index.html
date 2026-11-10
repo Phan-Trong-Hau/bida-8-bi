@@ -561,9 +561,9 @@
   scene.add(lamp);
 
   const stdMat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, ...o });
-  const feltM = stdMat(0x0a4a37, { roughness: .95 }), cushionM = stdMat(0x073a2c, { roughness: .9 });
-  const woodM = stdMat(0x4b1c12, { roughness: .5 }), woodDarkM = stdMat(0x26100a, { roughness: .5 });
-  const ivoryM = stdMat(0xd4af5f, { roughness: .3, metalness: .45 }), blackM = new THREE.MeshBasicMaterial({ color: 0x040404 });
+  const feltM = stdMat(0x1a4370, { roughness: .95 }), cushionM = stdMat(0x102c49, { roughness: .9 });
+  const woodM = stdMat(0x2e1911, { roughness: .55 }), woodDarkM = stdMat(0x1a0d08, { roughness: .45 });
+  const ivoryM = stdMat(0xece6d6, { roughness: .25, metalness: .1 }), blackM = new THREE.MeshBasicMaterial({ color: 0x040404 });
 
   function box(x0, x1, z0, z1, y0, y1, m, shadow = true) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), m);
@@ -581,24 +581,38 @@
   box(-CU, 0, 13, H - 13, 0, CUSH_H, cushionM);
   box(W, W + CU, 13, H - 13, 0, CUSH_H, cushionM);
   const E = CU + RW;
-  box(-E, W + E, -E, -CU, 0, RAIL_H, woodM);
-  box(-E, W + E, H + CU, H + E, 0, RAIL_H, woodM);
-  box(-E, -CU, -CU, H + CU, 0, RAIL_H, woodM);
-  box(W + CU, W + E, -CU, H + CU, 0, RAIL_H, woodM);
-  box(-E - 6, W + E + 6, -E - 6, H + E + 6, -110, -4, woodDarkM, false);
+  // Thành gỗ và thân bàn bo tròn: hình chữ nhật bo góc đùn khối, mép vát mềm
+  function roundRectShape(x0, z0, x1, z1, r) {
+    // toạ độ hình (x, -z) vì khối đùn được xoay -90° quanh trục x
+    const s = new THREE.Shape(), a = x0 - W / 2, b = x1 - W / 2, c = -(z0 - H / 2), d = -(z1 - H / 2);
+    s.moveTo(a + r, c); s.lineTo(b - r, c); s.quadraticCurveTo(b, c, b, c - r);
+    s.lineTo(b, d + r); s.quadraticCurveTo(b, d, b - r, d);
+    s.lineTo(a + r, d); s.quadraticCurveTo(a, d, a, d + r);
+    s.lineTo(a, c - r); s.quadraticCurveTo(a, c, a + r, c);
+    return s;
+  }
+  function slab(shape, y0, depth, m, bevel) {
+    const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 4, curveSegments: 16 });
+    const mesh = new THREE.Mesh(g, m); mesh.rotation.x = -Math.PI / 2; mesh.position.y = y0;
+    mesh.castShadow = mesh.receiveShadow = true; scene.add(mesh); return mesh;
+  }
+  const railShape = roundRectShape(-E, -E, W + E, H + E, 38);
+  railShape.holes.push(roundRectShape(-CU, -CU, W + CU, H + CU, 2));
+  slab(railShape, 0, RAIL_H, woodM, 3);
+  slab(roundRectShape(-E - 4, -E - 4, W + E + 4, H + E + 4, 42), -110, 104, woodDarkM, 4);
   // lỗ
   for (const p of POCKETS) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, RAIL_H + 1, 32), blackM);
-    m.position.copy(T(p.x, p.y, (RAIL_H + 1) / 2 - 0.5)); scene.add(m);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, RAIL_H + 5, 32), blackM);
+    m.position.copy(T(p.x, p.y, (RAIL_H + 5) / 2 - 0.5)); scene.add(m);
   }
   // diamond trên thành bàn, điểm chân bàn
   const dotGeo = new THREE.CircleGeometry(3.2, 12);
-  const addDot = (x, z, y = RAIL_H + .3, m = ivoryM) => {
+  const addDot = (x, z, y = RAIL_H + 3.3, m = ivoryM) => {
     const d = new THREE.Mesh(dotGeo, m); d.rotation.x = -Math.PI / 2; d.position.copy(T(x, z, y)); scene.add(d);
   };
   for (let i = 1; i < 8; i++) if (i !== 4) { addDot(W / 8 * i, -CU - RW / 2); addDot(W / 8 * i, H + CU + RW / 2); }
   for (let i = 1; i < 4; i++) { addDot(-CU - RW / 2, H / 4 * i); addDot(W + CU + RW / 2, H / 4 * i); }
-  addDot(FOOT.x, FOOT.y, .2, new THREE.MeshBasicMaterial({ color: 0x7fbf9f }));
+  addDot(FOOT.x, FOOT.y, .2, new THREE.MeshBasicMaterial({ color: 0x6f8fb3 }));
 
   // bi
   function ballTexture(n) {
