@@ -587,6 +587,7 @@
     <div class="sheet-head"><h2>Chọn avatar</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
     <div class="balls" id="lbBalls" role="group" aria-label="Chọn avatar"></div>
     <input type="file" id="lbFile" accept="image/*" hidden>
+    <p class="lb-note">Tên và ảnh đại diện được gửi qua máy chủ công cộng tới người trong phòng; ai biết mã phòng cũng có thể xem. Ảnh được thu nhỏ và xoá thông tin vị trí trước khi gửi.</p>
   </div></div>
   <div class="sheet" id="sh-cue" hidden><div class="sheet-card">
     <div class="sheet-head"><h2>Chọn gậy</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
@@ -635,8 +636,8 @@
   </div></div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" integrity="sha384-u4uqeACkFcoKl57rBQJHVGDd1pqhW4w8X3WjTu1ZksPdxoLqdt34jpoNkJisE25W" crossorigin="anonymous"></script>
 <script>
 (() => {
   const W = 1000, H = 500, RAIL = 46, R = 11;
@@ -744,18 +745,66 @@
     };
   }
 
+  // Kiểm tra chặt mọi trạng thái nhận từ mạng: chỉ giữ các trường biết trước, đúng kiểu, đúng phạm vi.
+  // Trạng thái hỏng (vd. bi sai) bị bỏ qua cả gói thay vì làm treo game.
+  const isNum = v => typeof v === 'number' && isFinite(v);
+  const pick01 = (v, d = 0) => v === 0 || v === 1 ? v : d;
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  function cleanBalls(arr) {
+    if (!Array.isArray(arr) || arr.length !== 16) return null;
+    const out = [], seenN = new Set();
+    for (const b of arr) {
+      if (!b || typeof b !== 'object') return null;
+      const n = b.n, x = b.x, y = b.y;
+      if (!Number.isInteger(n) || n < 0 || n > 15 || seenN.has(n) || !isNum(x) || !isNum(y)) return null;
+      if (x < -60 || x > W + 60 || y < -60 || y > H + 60) return null;
+      seenN.add(n); out.push({ n, x, y, on: !!b.on });
+    }
+    return out[0].n === 0 ? out : null;
+  }
+  function cleanFx(fx) {
+    if (!fx || typeof fx !== 'object') return undefined;
+    const o = {};
+    if (fx.by === 0 || fx.by === 1) o.by = fx.by;
+    if (typeof fx.foul === 'string' && /^(scratch|miss|wrong|need8|early8|time)$/.test(fx.foul)) o.foul = fx.foul;
+    if (fx.assign === 'solid' || fx.assign === 'stripe') o.assign = fx.assign;
+    for (const k of ['combo', 'streak', 'breakpot']) if (Number.isInteger(fx[k]) && fx[k] > 0 && fx[k] < 16) o[k] = fx[k];
+    if (fx.near === true) o.near = true;
+    return o;
+  }
   function normalize(d) {
-    const base = freshState(null);
+    if (!d || typeof d !== 'object') return null;
+    const balls = cleanBalls(d.balls); if (!balls) return null;
+    const sideObj = (v, f) => ({ p0: f(v && v.p0), p1: f(v && v.p1) });
+    const ev = d.event && typeof d.event === 'object' ? d.event : {};
+    let shot = null;
+    if (d.shot && typeof d.shot === 'object') {
+      const sb = cleanBalls(d.shot.balls), sp = d.shot.spin || {};
+      if (!sb || !isNum(d.shot.aim) || !isNum(d.shot.power)) return null;
+      shot = { id: str(d.shot.id, 32), aim: d.shot.aim, power: Math.max(0, Math.min(1, d.shot.power)), balls: sb, by: str(d.shot.by, 64),
+        spin: { x: isNum(sp.x) ? Math.max(-1, Math.min(1, sp.x)) : 0, y: isNum(sp.y) ? Math.max(-1, Math.min(1, sp.y)) : 0 } };
+    }
+    const phase = ['aim', 'place', 'moving', 'over'].includes(d.phase) ? d.phase : 'aim';
+    if (phase === 'moving' && !shot) return null;
     return {
-      ...base, ...d,
-      seats: { ...base.seats, ...(d.seats || {}) }, reset: { ...base.reset, ...(d.reset || {}) },
-      groups: { ...base.groups, ...(d.groups || {}) }, wins: { ...base.wins, ...(d.wins || {}) },
-      players: { ...base.players, ...(d.players || {}) }, felt: FELTS[d.felt] ? d.felt : 'navy',
-      streak: d.streak && typeof d.streak === 'object' ? d.streak : { who: -1, n: 0 },
-      timer: validTimer(+d.timer),
-      event: d.event || { id: '', kind: 'start', who: 0 },
+      v: 1, balls, shot, phase,
+      cur: pick01(d.cur), breaker: pick01(d.breaker), winner: d.winner === 0 || d.winner === 1 ? d.winner : -1,
+      isBreak: !!d.isBreak, seq: isNum(d.seq) && d.seq >= 0 ? d.seq : 0,
+      reason: ['clean', 'early', 'foul8'].includes(d.reason) ? d.reason : '',
+      groups: sideObj(d.groups, v => v === 'solid' || v === 'stripe' ? v : null),
+      wins: sideObj(d.wins, v => Number.isInteger(v) && v >= 0 && v < 1e5 ? v : 0),
+      seats: sideObj(d.seats, v => typeof v === 'string' && v && v.length <= 64 ? v : null),
+      reset: sideObj(d.reset, v => v === true),
+      players: sideObj(d.players, v => v && typeof v === 'object' ? { name: str(v.name, 16), av: cleanAv(v.av, v.ball) } : null),
+      felt: FELTS[d.felt] ? d.felt : 'navy', timer: validTimer(+d.timer),
+      streak: d.streak && typeof d.streak === 'object' ? { who: d.streak.who === 0 || d.streak.who === 1 ? d.streak.who : -1, n: Number.isInteger(d.streak.n) ? Math.max(0, Math.min(99, d.streak.n)) : 0 } : { who: -1, n: 0 },
+      event: { id: str(ev.id, 32), kind: str(ev.kind, 16) || 'start', who: ev.who === 0 || ev.who === 1 ? ev.who : 0, fx: cleanFx(ev.fx) },
+      react: d.react && typeof d.react === 'object' && REACT_SET.has(d.react.e) ? { id: str(d.react.id, 32), by: pick01(d.react.by), e: d.react.e } : null,
+      lastFoul: d.lastFoul && typeof d.lastFoul === 'object' ? { by: pick01(d.lastFoul.by), code: /^(scratch|miss|wrong|need8|early8|time)$/.test(d.lastFoul.code) ? d.lastFoul.code : '' } : null,
     };
   }
+  const REACT_SET = new Set(['😂', '👏', '😱', '😤', '🔥', '👍', '😭', '😎']);
+
 
   const loadBalls = arr => { balls = arr.map(b => ({ n: b.n, x: b.x, y: b.y, on: !!b.on, vx: 0, vy: 0 })); };
   const serialBalls = () => balls.map(b => ({ n: b.n, x: +b.x.toFixed(2), y: +b.y.toFixed(2), on: b.on }));
@@ -774,8 +823,10 @@
 
   function merge(s, p) {
     const o = { ...s };
-    for (const k in p) {
-      if (['seats', 'reset', 'groups', 'wins', 'players'].includes(k) && p[k] && typeof p[k] === 'object') o[k] = { ...s[k], ...p[k] };
+    for (const k of Object.keys(p || {})) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (['seats', 'reset', 'groups', 'wins', 'players'].includes(k) && p[k] && typeof p[k] === 'object')
+        o[k] = { ...s[k], ...(p[k].p0 !== undefined ? { p0: p[k].p0 } : {}), ...(p[k].p1 !== undefined ? { p1: p[k].p1 } : {}) };
       else o[k] = p[k];
     }
     return o;
@@ -793,6 +844,7 @@
   }
 
   function afterState(prev) {
+    poke();
     if (prev && S.react && (!prev.react || prev.react.id !== S.react.id)) showReact(S.react.by, S.react.e);
     if (prev && S.event.id !== prev.event.id) {
       const me = humanSeat(), k = S.event.kind;
@@ -899,8 +951,9 @@
     shotRec.rails++;
   }
 
+  const act = [];
   function step(dt) {
-    const act = balls.filter(b => b.on);
+    act.length = 0; for (const b of balls) if (b.on) act.push(b);
     for (const b of act) { b.x += b.vx * dt; b.y += b.vy * dt; }
     for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) {
       const a = act[i], b = act[j];
@@ -976,6 +1029,13 @@
     setPower(0); setSpin(0, 0);
   }
 
+  function spotCue() {
+    const c = balls[0]; c.vx = c.vy = 0; c.on = false;
+    for (let r = 0; r < 400; r += 2 * R) for (const [dx, dy] of [[0, 0], [-r, 0], [0, -r], [0, r], [-r, -r], [-r, r], [r, 0]]) {
+      const x = HEAD.x + dx, y = H / 2 + dy;
+      if (free(x, y, c)) { c.x = x; c.y = y; c.on = true; return; }
+    }
+  }
   function respot8() {
     const b = balls.find(b => b.n === 8);
     b.on = true; b.vx = b.vy = 0; b.x = FOOT.x; b.y = FOOT.y;
@@ -1019,7 +1079,7 @@
     if (!foul && wasBreak && s.potted.length) fx.breakpot = s.potted.length;
     if (!s.potted.length && [...s.near].some(n => !s.potted.includes(n))) fx.near = true;
     if (foul) {
-      balls[0].on = false;
+      spotCue(); // được đặt bi: bi trắng nằm sẵn ở đầu bàn, có thể đánh luôn hoặc kéo đi chỗ khác
       return { ...base, balls: serialBalls(), groups, cur: 1 - P, phase: 'place', lastFoul: { by: P, code: foul }, event: { id: rid(), kind: 'foul', who: 1 - P, fx } };
     }
     if (own) {
@@ -1075,6 +1135,7 @@
     applyRemote(normalize(snap.data()));
   }
   function applyRemote(d) {
+    if (!d) return;
     if (synced && d.seq < S.seq) return;
     synced = true;
     const prev = S; S = d;
@@ -1107,6 +1168,7 @@
         const snap = await mainRef.get();
         if (!snap.exists) return;
         const d = normalize(snap.data());
+        if (!d) return;
         if (d.seats.p0 === myId || d.seats.p1 === myId) return;
         const k = !d.seats.p0 ? 'p0' : !d.seats.p1 ? 'p1' : null;
         if (k) await mainRef.update({ seats: { [k]: myId } });
@@ -1173,15 +1235,30 @@
   const code4 = () => String(Math.floor(1000 + Math.random() * 9000));
   const topic = k => 'bida8/' + roomId + '/' + k;
   let retryRoom = () => {};
+  // ai được phép đổi trạng thái phòng: hai người đang ngồi; người mới chỉ được ngồi vào ghế trống và đặt tên/avatar của mình
+  function trusted(from, patch) {
+    if (typeof from !== 'string' || !from) return false;
+    if (S.seats.p0 === from || S.seats.p1 === from) return true;
+    if (!patch) return false; // trạng thái đầy đủ chỉ nhận từ người đang ngồi
+    const keys = Object.keys(patch);
+    if (!keys.every(k => k === 'seats' || k === 'players')) return false;
+    const ss = patch.seats || {};
+    const taking = Object.keys(ss).filter(k => k === 'p0' || k === 'p1');
+    if (Object.keys(ss).length !== taking.length) return false;
+    for (const k of taking) if (ss[k] !== from || S.seats[k]) return false;
+    const pl = patch.players || {};
+    for (const k of Object.keys(pl)) if (!taking.includes(k)) return false;
+    return taking.length > 0;
+  }
   // ai đang kết nối: lần cuối nghe thấy từng người
-  const seen = {};
+  const seen = new Map();
   let joinedAt = 0;
   function renderPresence() {
     [0, 1].forEach(i => {
       const id = S.seats['p' + i], dot = $('net' + i), who = $('who' + i);
       if (!mq || !id) { dot.hidden = true; who.classList.remove('off'); return; }
       const on = id === myId ? mq.connected
-        : seen[id] != null ? (seen[id] > 0 && Date.now() - seen[id] < 12000) : Date.now() - joinedAt < 8000;
+        : seen.has(id) ? (seen.get(id) > 0 && Date.now() - seen.get(id) < 12000) : Date.now() - joinedAt < 8000;
       dot.hidden = false; who.classList.toggle('off', !on);
       dot.title = on ? 'Đang kết nối' : 'Mất kết nối';
     });
@@ -1198,6 +1275,7 @@
     if (k) commit({ seats: { [k]: myId } });
   }
   function receive(d) {
+    if (!d) return;
     const prev = S;
     applyRemote(d);
     const me = mySeat();
@@ -1247,7 +1325,7 @@
     mq.on('message', (tp, buf) => {
       let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
       if (!msg || typeof msg !== 'object') return;
-      if (typeof msg.from === 'string' && msg.from !== myId) { seen[msg.from] = msg.off ? 0 : Date.now(); if (tp.endsWith('/hb')) { renderPresence(); return; } }
+      if (typeof msg.from === 'string' && msg.from !== myId) { seen.set(msg.from.slice(0, 64), msg.off ? 0 : Date.now()); if (tp.endsWith('/hb')) { renderPresence(); return; } }
       if (tp.endsWith('/state') && msg.s) {
         if (!gotState && creating) {
           // tạo phòng mới: bỏ qua ván cũ đã bỏ (quá 6 tiếng), còn ván đang chơi thì đổi mã
@@ -1260,8 +1338,9 @@
           claimIfFree();
           if (S.phase === 'over') { oldOver = S.event.id; renderUI(); } else popup(joinEvent());
           if (!S.seats.p0 || !S.seats.p1) showInvite();
-        } else if (msg.from !== myId) receive(normalize(msg.s));
-      } else if (tp.endsWith('/patch') && msg.p && msg.from !== myId && gotState) {
+        } else if (msg.from !== myId && trusted(msg.from, null)) receive(normalize(msg.s));
+      } else if (tp.endsWith('/patch') && msg.p && typeof msg.p === 'object' && msg.from !== myId && gotState) {
+        if (!trusted(msg.from, msg.p)) return;
         receive(normalize(merge(S, msg.p)));
       }
     });
@@ -1300,6 +1379,8 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.autoUpdate = false; // bóng đổ chỉ tính lại khi có vật chuyển động
+  renderer.shadowMap.needsUpdate = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setClearColor(0x121619, 1);
   const scene = new THREE.Scene();
@@ -1579,6 +1660,7 @@
       placeGhost.position.copy(T(hover.x, hover.y, R));
       placeGhost.material.color.set(free(hover.x, hover.y, balls[0]) ? 0xf4f1e8 : 0xff8a73);
     }
+    if (shadowsDirty) { renderer.shadowMap.needsUpdate = true; shadowsDirty = false; }
     renderer.render(scene, camera);
   }
 
@@ -1753,7 +1835,7 @@
       case 'again': main = cap(n) + ' ăn bi, được đánh tiếp'; break;
       case 'foul':
         main = by ? cap(by) + ' đánh lỗi' + (FOUL_TEXT[foulCode] ? ': ' + FOUL_TEXT[foulCode] : '') : 'Có lỗi';
-        sub = cap(n) + ' được đặt bi trắng ở bất kỳ đâu'; foul = true; break;
+        sub = cap(n) + ' được đặt bi trắng ở bất kỳ đâu (kéo bi trắng để đổi chỗ)'; foul = true; break;
       case 'bad': main = 'Chỗ này không đặt được bi trắng'; sub = 'Chọn chỗ trống trên mặt bàn'; foul = true; break;
       case 'joined': main = cap(n) + ' đã vào bàn'; break;
       case 'back': main = 'Đã kết nối lại'; break;
@@ -2001,7 +2083,22 @@
   });
   window.addEventListener('resize', layout);
 
-  let last = performance.now();
+  // ---------- Hiệu năng: chỉ vẽ khi cần, tự hạ chất lượng trên máy yếu ----------
+  let lastInput = 0, frameNo = 0, shadowsDirty = true, lobbyDrawn = false, slowFrames = 0, fastFrames = 0, quality = 0;
+  const poke = () => { lastInput = performance.now(); };
+  ['pointerdown', 'pointermove', 'keydown', 'wheel'].forEach(t => window.addEventListener(t, poke, { passive: true }));
+  window.addEventListener('resize', () => { poke(); shadowsDirty = true; lobbyDrawn = false; });
+  function adaptQuality(dt) {
+    if (dt > 26) slowFrames++; else if (dt < 18) fastFrames++;
+    if (slowFrames + fastFrames < 90) return;
+    if (slowFrames > 45 && quality < 2) {
+      quality++;
+      if (quality === 1) { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)); layout(); }
+      if (quality === 2) { renderer.shadowMap.enabled = false; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
+    }
+    slowFrames = fastFrames = 0;
+  }
+  let last = performance.now(), last2 = performance.now();
   function loop(now) {
     const frames = Math.min((now - last) / (1000 / 60), 3); last = now;
     if (sim) {
@@ -2016,7 +2113,17 @@
     }
     updateClock(now);
     botTick(now);
-    render3D(now);
+    const dt = now - last2; last2 = now;
+    if (!$('lobby').hidden) {
+      // đang ở sảnh: bàn phía sau đứng yên, vẽ một lần là đủ
+      if (!lobbyDrawn) { lobbyDrawn = true; shadowsDirty = true; render3D(now); }
+    } else {
+      lobbyDrawn = false;
+      const busy = sim || botShowing || cueDrag || pocketFx.length || Object.keys(sinking).length || now - lastInput < 600 || canPlace();
+      if (busy) { shadowsDirty = true; adaptQuality(dt); }
+      if (busy || frameNo % 4 === 0) render3D(now);
+      frameNo++;
+    }
     requestAnimationFrame(loop);
   }
 
