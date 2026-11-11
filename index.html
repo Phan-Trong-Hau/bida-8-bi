@@ -1293,7 +1293,7 @@
     roomId = m ? m[1] : code4();
     const enter = () => {
       history.replaceState(null, '', '#r-' + roomId);
-      mq.subscribe([topic('state'), topic('patch'), topic('hb')], { qos: 1 }, () => {
+      mq.subscribe([topic('state'), topic('patch'), topic('hb'), topic('aim')], { qos: 1 }, () => {
         if (gotState) return;
         // không có ván nào đang lưu cho phòng này: mình là người tạo phòng
         clearTimeout(createTimer);
@@ -1307,7 +1307,7 @@
       });
     };
     retryRoom = () => { // mã vừa chọn đang có ván khác: đổi mã
-      mq.unsubscribe([topic('state'), topic('patch'), topic('hb')]);
+      mq.unsubscribe([topic('state'), topic('patch'), topic('hb'), topic('aim')]);
       clearTimeout(createTimer); roomId = code4(); enter();
     };
     mq = mqtt.connect(BROKER, {
@@ -1326,6 +1326,13 @@
       let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
       if (!msg || typeof msg !== 'object') return;
       if (typeof msg.from === 'string' && msg.from !== myId) { seen.set(msg.from.slice(0, 64), msg.off ? 0 : Date.now()); if (tp.endsWith('/hb')) { renderPresence(); return; } }
+      if (tp.endsWith('/aim')) {
+        const fin = v => typeof v === 'number' && isFinite(v);
+        if (!gotState || msg.from === myId || S.seats['p' + S.cur] !== msg.from || ![msg.a, msg.p, msg.sx, msg.sy].every(fin)) return;
+        const cl = (v, m) => Math.max(-m, Math.min(m, v));
+        remoteAim = { seat: S.cur, a: cl(msg.a, 20), p: cl(msg.p, 1) < 0 ? 0 : cl(msg.p, 1), sx: cl(msg.sx, 1), sy: cl(msg.sy, 1), t: performance.now() };
+        return;
+      }
       if (tp.endsWith('/state') && msg.s) {
         if (!gotState && creating) {
           // tạo phòng mới: bỏ qua ván cũ đã bỏ (quá 6 tiếng), còn ván đang chơi thì đổi mã
@@ -1627,12 +1634,30 @@
       const dl = prefs.longAim ? wallDist(gx, gy, tx, ty) * k : (50 + power * 110) * k;
       setLine(defLine, T(gx, gy, 1), T(gx + tx * dl, gy + ty * dl, 1));
     }
-    // gậy dịch theo điểm chạm trên bi trắng
-    const off = R * 0.6;
-    stick.position.copy(T(c.x - dy * spin.x * off, c.y + dx * spin.x * off, R + spin.y * off));
-    stick.rotation.y = -aim;
-    stickInner.position.x = -(R + 4 + power * 90);
+    placeStick(aim, power, spin);
   }
+  // gậy dịch theo điểm chạm trên bi trắng
+  function placeStick(a, pw, sp) {
+    const c = balls[0], dx = Math.cos(a), dy = Math.sin(a), off = R * 0.6;
+    stick.position.copy(T(c.x - dy * sp.x * off, c.y + dx * sp.x * off, R + sp.y * off));
+    stick.rotation.y = -a;
+    stickInner.position.x = -(R + 4 + pw * 90);
+  }
+  // gậy của đối thủ đang ngắm (chỉ thấy gậy, không thấy đường ngắm)
+  let remoteAim = null; const shownAim = { a: 0, p: 0, sx: 0, sy: 0, init: false };
+  function remoteStick(now, dt) {
+    const r = remoteAim;
+    if (sim) remoteAim = null;
+    if (!r || now - r.t > 3000 || sim || !balls[0].on || S.cur !== r.seat || !(S.phase === 'aim' || S.phase === 'place')) { shownAim.init = false; return false; }
+    if (!shownAim.init) Object.assign(shownAim, r, { init: true });
+    const k = 1 - Math.exp(-dt / 70);
+    let da = r.a - shownAim.a; da = Math.atan2(Math.sin(da), Math.cos(da));
+    shownAim.a += da * k; shownAim.p += (r.p - shownAim.p) * k;
+    shownAim.sx += (r.sx - shownAim.sx) * k; shownAim.sy += (r.sy - shownAim.sy) * k;
+    placeStick(shownAim.a, shownAim.p, { x: shownAim.sx, y: shownAim.sy });
+    return true;
+  }
+  const remoteMoving = () => remoteAim && Math.abs(Math.atan2(Math.sin(remoteAim.a - shownAim.a), Math.cos(remoteAim.a - shownAim.a))) + Math.abs(remoteAim.p - shownAim.p) > .002;
 
   // vạch phá và vùng đầu bàn (được đặt bi trắng khi phá)
   const headLine = new THREE.Mesh(new THREE.PlaneGeometry(1.4, H), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .16 }));
@@ -1646,6 +1671,7 @@
     m.rotation.x = -Math.PI / 2; m.position.copy(T(px, py, RAIL_H + 6)); m.renderOrder = 7;
     scene.add(m); pocketFx.push({ m, t0: performance.now() });
   }
+  let lastStick = performance.now();
   function render3D(now) {
     for (let i = pocketFx.length - 1; i >= 0; i--) {
       const f = pocketFx[i], a = (now - f.t0) / 550;
@@ -1653,10 +1679,13 @@
       f.m.scale.setScalar(14 + 30 * a); f.m.material.opacity = .9 * (1 - a);
     }
     syncBalls();
-    const aiming = (isAiming() || botShowing) && balls[0].on && !cueDrag;
-    stick.visible = aimLine.visible = ghostRing.visible = aiming;
+    const aiming = isAiming() && balls[0].on && !cueDrag;
+    aimLine.visible = ghostRing.visible = aiming;
     if (!aiming) { objLine.visible = defLine.visible = false; for (const l of bounceLines) l.visible = false; }
     if (aiming) updateAim();
+    else if (botShowing && balls[0].on) placeStick(aim, power, spin); // máy đang ngắm: chỉ hiện gậy
+    stick.visible = aiming || (botShowing && balls[0].on) || remoteStick(now, now - lastStick);
+    lastStick = now;
     const placing = canPlace();
     kitchen.visible = placing && S.isBreak;
     handRing.visible = placing && balls[0].on && !cueDrag;
@@ -2114,6 +2143,15 @@
     }
     slowFrames = fastFrames = 0;
   }
+  // gửi hướng gậy cho đối thủ xem (~12 lần/giây khi đổi, 1 lần/giây khi đứng yên)
+  let aimSent = 0, aimKey = '';
+  function sendAim(now) {
+    if (!mq || !mq.connected || !gotState || !isAiming() || cueDrag || !balls[0].on || !S.seats.p0 || !S.seats.p1) return;
+    const key = aim.toFixed(3) + power.toFixed(2) + spin.x.toFixed(2) + spin.y.toFixed(2);
+    if (now - aimSent < (key === aimKey ? 1000 : 80)) return;
+    aimSent = now; aimKey = key;
+    mq.publish(topic('aim'), JSON.stringify({ from: myId, a: +aim.toFixed(4), p: +power.toFixed(3), sx: +spin.x.toFixed(2), sy: +spin.y.toFixed(2) }), { qos: 0 });
+  }
   let last = performance.now(), last2 = performance.now();
   function loop(now) {
     const frames = Math.min((now - last) / (1000 / 60), 3); last = now;
@@ -2129,13 +2167,14 @@
     }
     updateClock(now);
     botTick(now);
+    sendAim(now);
     const dt = now - last2; last2 = now;
     if (!$('lobby').hidden) {
       // đang ở sảnh: bàn phía sau đứng yên, vẽ một lần là đủ
       if (!lobbyDrawn) { lobbyDrawn = true; shadowsDirty = true; render3D(now); }
     } else {
       lobbyDrawn = false;
-      const busy = sim || botShowing || cueDrag || pocketFx.length || Object.keys(sinking).length || now - lastInput < 600 || canPlace();
+      const busy = sim || botShowing || cueDrag || remoteMoving() || pocketFx.length || Object.keys(sinking).length || now - lastInput < 600 || canPlace();
       if (busy) { shadowsDirty = true; adaptQuality(dt); }
       if (busy || frameNo % 4 === 0) render3D(now);
       frameNo++;
