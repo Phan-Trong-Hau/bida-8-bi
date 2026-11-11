@@ -346,6 +346,15 @@
   }
   .code-in:focus { outline: none; border-color: var(--brass); }
   .bots { display: grid; gap: 14px; }
+  .sync-in { font-size: 26px; letter-spacing: .18em; padding-left: .18em; text-transform: uppercase; }
+  .sync-box { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+  .sync-qr { width: 132px; height: 132px; padding: 8px; border-radius: 12px; background: #fff; box-sizing: border-box; display: grid; place-items: center; }
+  .sync-qr img, .sync-qr svg { width: 100%; height: 100%; image-rendering: pixelated; }
+  .sync-code { font: 700 26px/1.1 var(--display); letter-spacing: .12em; color: var(--brass); word-break: break-all; }
+  .sync-st { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+  .sync-st.ok { color: #7bd88f; }
+  .sync-warn { margin: 0; font-size: 12.5px; color: var(--muted); }
+  #sh-sync .row { display: flex; gap: 10px; } #sh-sync .row button { flex: 1; }
   @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   /* cỡ màn tính theo khung sảnh (đã xoay), không theo chiều thật của điện thoại */
@@ -569,6 +578,7 @@
       <h1 class="logo" aria-label="Bida 8 Bi"><span>BIDA</span><span class="logo8" aria-hidden="true"><b>8</b></span><span>BI</span></h1>
       <div class="lb-icons">
         <button class="ic" id="lbInstall" hidden aria-label="Cài lên màn hình chính">📲</button>
+        <button class="ic" id="lbSyncOpen" data-open="sh-sync" aria-label="Đồng bộ giữa các máy" hidden>☁️</button>
         <button class="ic" data-open="sh-history" aria-label="Lịch sử đấu">🏆</button>
       </div>
     </header>
@@ -652,6 +662,26 @@
     <ol class="hlist" id="hList"></ol>
     <button class="hclear" id="hClear">Xoá lịch sử</button>
   </div></div>
+  <div class="sheet" id="sh-sync" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Đồng bộ máy</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div id="syncOff" style="display:grid;gap:12px">
+      <p class="sync-warn">Dùng chung tên, avatar, gậy, màu bàn và lịch sử đấu trên laptop và điện thoại.</p>
+      <button class="btn3d gold" id="syncNew">Tạo mã đồng bộ<small>Lấy thông tin máy này làm gốc</small></button>
+      <label class="lbl" for="syncIn">Đã có mã từ máy khác?</label>
+      <input class="code-in sync-in" id="syncIn" maxlength="11" placeholder="XXXXX-XXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <p class="lb-err" id="syncErr" hidden>Mã đồng bộ gồm 10 ký tự.</p>
+      <button class="btn3d blue" id="syncJoin">Kết nối<small>Lấy thông tin từ máy kia</small></button>
+    </div>
+    <div id="syncOn" hidden style="display:grid;gap:12px">
+      <div class="sync-box">
+        <div class="sync-qr" id="syncQr" aria-label="Mã QR đồng bộ"></div>
+        <div><span class="lbl">Mã của bạn</span><div class="sync-code" id="syncCode"></div><p class="sync-st" id="syncSt"></p></div>
+      </div>
+      <p class="sync-warn">Trên máy kia: quét mã QR bằng camera, hoặc mở ☁️ rồi nhập mã.</p>
+      <div class="row"><button id="syncShare">Gửi link</button><button id="syncStop">Ngắt đồng bộ</button></div>
+      <p class="sync-warn">Giữ kín mã này: ai có mã đều xem và đổi được thông tin của bạn.</p>
+    </div>
+  </div></div>
   <div class="sheet" id="sh-install" hidden><div class="sheet-card">
     <div class="sheet-head"><h2>Cài như app</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
     <p class="lb-note" id="installHint"></p>
@@ -720,7 +750,8 @@
   const validTimer = t => TIMERS.some(([v]) => v === t) ? t : 0;
   { let t = 0; try { t = +JSON.parse(localStorage.getItem('bida.prefs') || '{}').timer; } catch (e) {} prefs.timer = validTimer(t); }
   { let la = true; try { const v = JSON.parse(localStorage.getItem('bida.prefs') || '{}').longAim; if (v === false) la = false; } catch (e) {} prefs.longAim = la; }
-  const savePrefs = () => { try { localStorage.setItem('bida.prefs', JSON.stringify(prefs)); } catch (e) {} };
+  let onLocalChange = () => {}; // gắn bộ đồng bộ sau
+  const savePrefs = () => { try { localStorage.setItem('bida.prefs', JSON.stringify(prefs)); } catch (e) {} onLocalChange('prefs'); };
   let started = false;
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   let vert = false, cueDrag = false, rot = false;
@@ -1029,7 +1060,9 @@
   function startSim(shot, mine) {
     loadBalls(shot.balls);
     const c = balls[0];
-    c.vx = Math.cos(shot.aim) * shot.power * MAXV; c.vy = Math.sin(shot.aim) * shot.power * MAXV;
+    // lực tăng mạnh hơn ở cuối thanh: 100% ≈ 1,25 lần trước, cú nhẹ gần như giữ nguyên
+    const sp = shot.power * MAXV * (1 + 0.25 * shot.power * shot.power);
+    c.vx = Math.cos(shot.aim) * sp; c.vy = Math.sin(shot.aim) * sp;
     const g = S.groups['p' + S.cur];
     shotRec = { firstHit: null, potted: [], scratch: false, cleared: g ? remaining(g) === 0 : false, near: new Set(),
       spin: shot.spin || { x: 0, y: 0 }, dir: { x: Math.cos(shot.aim), y: Math.sin(shot.aim) }, rails: 0 };
@@ -2415,7 +2448,7 @@
 
   // ---------- Lịch sử đấu (lưu trên máy này) ----------
   const loadHistory = () => { try { const h = JSON.parse(localStorage.getItem('bida.history') || '[]'); return Array.isArray(h) ? h : []; } catch (e) { return []; } };
-  const saveHistory = h => { try { localStorage.setItem('bida.history', JSON.stringify(h.slice(-200))); } catch (e) {} };
+  const saveHistory = h => { try { localStorage.setItem('bida.history', JSON.stringify(h.slice(-200))); } catch (e) {} onLocalChange('hist'); };
   const REASON_TEXT = { clean: 'bi 8 đúng luật', early: 'bi 8 vào sớm', foul8: 'lỗi khi bi 8 rơi' };
   function recordGame() {
     const me = humanSeat(); if (me < 0) return;
@@ -2424,6 +2457,159 @@
     h.push({ id, t: Date.now(), win: S.winner === me, opp: whoName(1 - me), reason: S.reason, room: roomId || '' });
     saveHistory(h); renderHistory();
   }
+  // ---------- Đồng bộ giữa các máy: mã bí mật 10 ký tự, dữ liệu mã hoá AES-GCM bằng khoá suy ra từ mã ----------
+  // Máy chủ công cộng chỉ thấy tên kênh (băm từ mã) và dữ liệu đã mã hoá.
+  const SYNC_ABC = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const SYNC_FIELDS = ['name', 'av', 'felt', 'cue', 'timer', 'longAim'];
+  const syncOK = () => !!(window.mqtt && window.crypto && crypto.subtle && !(window.claude && window.claude.use));
+  const normCode = v => String(v || '').toUpperCase().split('').filter(c => SYNC_ABC.includes(c)).join('');
+  const fmtCode = c => c.slice(0, 5) + '-' + c.slice(5);
+  let syncMeta = (() => { try { const m = JSON.parse(localStorage.getItem('bida.sync') || 'null'); return m && typeof m.code === 'string' && m.code.length === 10 ? m : null; } catch (e) { return null; } })();
+  const saveMeta = () => { try { if (syncMeta) localStorage.setItem('bida.sync', JSON.stringify(syncMeta)); else localStorage.removeItem('bida.sync'); } catch (e) {} };
+  const prefsSnap = () => JSON.stringify(SYNC_FIELDS.map(k => prefs[k] === undefined ? null : prefs[k]));
+  let syncConn = null, syncKey = null, syncTopic = '', syncPushT = null, syncGot = false, syncLastBody = '', syncFirstT = null;
+  function histClearedNow() { if (syncMeta) { syncMeta.hc = Date.now(); saveMeta(); } }
+  const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(s); };
+  const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function deriveSync(code) {
+    const enc = new TextEncoder();
+    const base = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveBits']);
+    const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode('bida8-sync-v1'), iterations: 200000, hash: 'SHA-256' }, base, 384));
+    const id = Array.from(bits.slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
+    const key = await crypto.subtle.importKey('raw', bits.slice(16, 48), 'AES-GCM', false, ['encrypt', 'decrypt']);
+    return { id, key };
+  }
+  function syncBody() {
+    const pr = {}; for (const k of SYNC_FIELDS) pr[k] = prefs[k];
+    return { v: 1, pt: syncMeta.pt || 0, hc: syncMeta.hc || 0, prefs: pr, hist: loadHistory() };
+  }
+  async function syncPush() {
+    clearTimeout(syncPushT); syncPushT = null;
+    if (!syncConn || !syncConn.connected || !syncKey) return;
+    const body = JSON.stringify(syncBody());
+    if (body === syncLastBody) return;
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, syncKey, new TextEncoder().encode(body)));
+    syncLastBody = body;
+    syncConn.publish(syncTopic, JSON.stringify({ iv: b64(iv), ct: b64(ct) }), { qos: 1, retain: true });
+    setSyncSt();
+  }
+  onLocalChange = kind => {
+    if (!syncMeta) return;
+    if (kind === 'prefs') { const sn = prefsSnap(); if (sn === syncMeta.snap) return; syncMeta.snap = sn; syncMeta.pt = Date.now(); saveMeta(); }
+    if (syncGot) { clearTimeout(syncPushT); syncPushT = setTimeout(syncPush, 1200); }
+  };
+  const cleanGame = g => g && typeof g === 'object' && typeof g.id === 'string' && isFinite(g.t)
+    ? { id: g.id.slice(0, 40), t: +g.t, win: !!g.win, opp: String(g.opp || '').slice(0, 16), reason: String(g.reason || '').slice(0, 12), room: String(g.room || '').slice(0, 12) } : null;
+  function syncMerge(d) {
+    if (!d || d.v !== 1) return;
+    let changed = false;
+    if (+d.hc > (syncMeta.hc || 0)) syncMeta.hc = +d.hc;
+    if (+d.pt > (syncMeta.pt || 0) && d.prefs && typeof d.prefs === 'object') {
+      const r = d.prefs;
+      prefs.name = typeof r.name === 'string' ? r.name.slice(0, 16) : prefs.name;
+      prefs.av = cleanAv(r.av) || (r.av === null ? null : prefs.av);
+      if (FELTS[r.felt]) prefs.felt = r.felt;
+      if (CUES[r.cue]) prefs.cue = r.cue;
+      prefs.timer = validTimer(+r.timer);
+      if (typeof r.longAim === 'boolean') prefs.longAim = r.longAim;
+      syncMeta.pt = +d.pt; syncMeta.snap = prefsSnap();
+      try { localStorage.setItem('bida.prefs', JSON.stringify(prefs)); } catch (e) {}
+      changed = true;
+    }
+    const byId = new Map();
+    for (const g of [...loadHistory(), ...(Array.isArray(d.hist) ? d.hist : [])]) { const c = cleanGame(g); if (c && c.t > (syncMeta.hc || 0)) byId.set(c.id, c); }
+    const hist = [...byId.values()].sort((a, b) => a.t - b.t).slice(-200);
+    if (JSON.stringify(hist) !== JSON.stringify(loadHistory())) { try { localStorage.setItem('bida.history', JSON.stringify(hist)); } catch (e) {} changed = true; }
+    saveMeta();
+    if (changed) refreshSynced();
+  }
+  function refreshSynced() {
+    if (lbBuilt) {
+      if (document.activeElement !== $('lbName')) $('lbName').value = prefs.name;
+      pressList($('lbBalls'), avKey(prefs.av)); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
+      pressList($('lbAim'), String(prefs.longAim));
+      if (lobbyMode === 'start') pressList($('lbTimers'), prefs.timer);
+      paintCuePreview(prefs.cue); refreshTiles();
+    }
+    renderHistory();
+    if (started) { announceMe(); if (!online) applyFelt(prefs.felt); renderUI(); }
+  }
+  async function syncStart(fresh) {
+    if (!syncMeta || !syncOK()) return;
+    syncStop(true);
+    setSyncSt('Đang kết nối…');
+    let d; try { d = await deriveSync(syncMeta.code); } catch (e) { setSyncSt('Máy này không hỗ trợ mã hoá'); return; }
+    syncKey = d.key; syncTopic = 'bida8/sync/' + d.id; syncGot = false; syncLastBody = '';
+    const c = syncConn = mqtt.connect(BROKER, { clientId: 'bida8s_' + rid() + rid(), clean: true, reconnectPeriod: 3000, connectTimeout: 10000, keepalive: 30 });
+    c.on('connect', () => {
+      c.subscribe(syncTopic, { qos: 1 }, () => {
+        // không có bản nào trên máy chủ (mã mới): đẩy bản của máy này lên
+        clearTimeout(syncFirstT);
+        syncFirstT = setTimeout(() => { if (syncConn === c && !syncGot) { syncGot = true; syncPush(); setSyncSt(); } }, 2500);
+      });
+      setSyncSt();
+    });
+    c.on('offline', () => setSyncSt());
+    c.on('message', async (tp, buf) => {
+      if (syncConn !== c) return;
+      let body = null;
+      try {
+        const m = JSON.parse(buf.toString());
+        const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(m.iv) }, syncKey, unb64(m.ct));
+        body = new TextDecoder().decode(pt);
+      } catch (e) { body = null; }
+      syncGot = true; clearTimeout(syncFirstT);
+      if (body === null) { syncLastBody = ''; syncPush(); return; } // bản trên máy chủ hỏng: ghi lại bản của mình
+      syncLastBody = body;
+      let d = null; try { d = JSON.parse(body); } catch (e) {}
+      syncMerge(d);
+      syncPush(); // máy này có gì mới hơn thì gửi lại
+      setSyncSt();
+    });
+  }
+  function syncStop(keep) {
+    clearTimeout(syncPushT); clearTimeout(syncFirstT);
+    if (syncConn) { try { syncConn.end(true); } catch (e) {} syncConn = null; }
+    syncKey = null; syncGot = false;
+    if (!keep) { syncMeta = null; saveMeta(); }
+  }
+  function setSyncSt(text) {
+    const el = $('syncSt'); if (!el) return;
+    const ok = !text && syncConn && syncConn.connected && syncGot;
+    el.textContent = text || (ok ? '✓ Đã đồng bộ' : syncConn && syncConn.connected ? 'Đang đồng bộ…' : 'Mất kết nối, sẽ thử lại…');
+    el.classList.toggle('ok', !!ok);
+  }
+  function syncLink() { return location.href.split('#')[0] + '#sync-' + syncMeta.code; }
+  let qrLoading = null;
+  function loadQr() {
+    if (window.qrcode) return Promise.resolve();
+    return qrLoading = qrLoading || new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+      sc.integrity = 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'; sc.crossOrigin = 'anonymous';
+      sc.onload = res; sc.onerror = () => { qrLoading = null; rej(); }; document.head.appendChild(sc);
+    });
+  }
+  function renderSync() {
+    $('lbSyncOpen').hidden = !syncOK();
+    $('syncOff').hidden = !!syncMeta; $('syncOn').hidden = !syncMeta;
+    $('syncErr').hidden = true;
+    if (!syncMeta) return;
+    $('syncCode').textContent = fmtCode(syncMeta.code);
+    setSyncSt();
+    const box = $('syncQr'); box.textContent = '';
+    loadQr().then(() => {
+      if (!syncMeta) return;
+      const q = qrcode(0, 'M'); q.addData(syncLink()); q.make();
+      box.innerHTML = q.createSvgTag({ cellSize: 3, margin: 0, scalable: true });
+    }).catch(() => { box.textContent = 'QR'; });
+  }
+  function syncLinkCode(code, fresh) {
+    syncMeta = { code, pt: fresh ? Date.now() : 0, hc: 0, snap: prefsSnap() };
+    saveMeta(); renderSync(); syncStart(fresh);
+  }
+
   function renderHistory() {
     const h = loadHistory(), w = h.filter(g => g.win).length;
     $('hSum').innerHTML = h.length ? `Thắng <b>${w}</b> · Thua ${h.length - w}` : 'Chưa có ván';
@@ -2448,7 +2634,7 @@
   let clearArmed = false;
   $('hClear').addEventListener('click', () => {
     if (!clearArmed) { clearArmed = true; $('hClear').textContent = 'Bấm lần nữa để xoá hết'; setTimeout(() => { clearArmed = false; $('hClear').textContent = 'Xoá lịch sử'; }, 3000); return; }
-    saveHistory([]); clearArmed = false; $('hClear').textContent = 'Xoá lịch sử'; renderHistory();
+    histClearedNow(); saveHistory([]); clearArmed = false; $('hClear').textContent = 'Xoá lịch sử'; renderHistory();
   });
 
   // ---------- Cài như app (chỉ khi trang có manifest, tức bản GitHub Pages) ----------
@@ -2473,7 +2659,9 @@
   const hasNet = () => !!(window.claude && window.claude.use) || !!window.mqtt;
   const invited = () => !(window.claude && window.claude.use) && /^#r-[a-z0-9]+$/.test(location.hash);
   function pressList(el, sel, key) { for (const b of el.children) b.setAttribute('aria-pressed', b.dataset.k === String(sel)); }
+  let lbBuilt = false;
   function buildLobby() {
+    lbBuilt = true;
     const balls = $('lbBalls');
     const addPick = (av, label) => {
       const b = document.createElement('button'); b.className = 'pick'; b.dataset.k = avKey(av); b.setAttribute('aria-label', label);
@@ -2566,14 +2754,42 @@
     $('lbRoom').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
     $('lbRoom').addEventListener('input', () => { $('lbErr').hidden = true; });
     $('lbName').addEventListener('keydown', e => { if (e.key === 'Enter') $('lbName').blur(); });
+    $('syncNew').addEventListener('click', () => {
+      prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs();
+      const r = crypto.getRandomValues(new Uint8Array(10));
+      syncLinkCode(Array.from(r, x => SYNC_ABC[x & 31]).join(''), true);
+    });
+    const syncJoin = () => {
+      const code = normCode($('syncIn').value);
+      if (code.length !== 10) { $('syncErr').hidden = false; return; }
+      $('syncIn').value = ''; syncLinkCode(code, false);
+    };
+    $('syncJoin').addEventListener('click', syncJoin);
+    $('syncIn').addEventListener('keydown', e => { if (e.key === 'Enter') syncJoin(); });
+    $('syncIn').addEventListener('input', () => {
+      $('syncErr').hidden = true;
+      const c = normCode($('syncIn').value).slice(0, 10), v = c.length > 5 ? fmtCode(c) : c;
+      if ($('syncIn').value !== v) $('syncIn').value = v;
+    });
+    $('syncStop').addEventListener('click', () => { syncStop(); renderSync(); });
+    $('syncShare').addEventListener('click', async () => {
+      const url = syncLink();
+      try {
+        if (navigator.share) { await navigator.share({ title: 'Đồng bộ Bida 8 Bi', url }); return; }
+        await navigator.clipboard.writeText(url); $('syncShare').textContent = 'Đã copy link';
+        setTimeout(() => { $('syncShare').textContent = 'Gửi link'; }, 2000);
+      } catch (e) {}
+    });
+    renderSync();
   }
   function openSheet(id) {
     document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = sh.id !== id; });
     // gậy 3D chuyển vào bảng chọn để xem trước ngay khi bấm mẫu khác
     (id === 'sh-cue' ? $('cueSlot') : $('cueHome')).appendChild($('cuePrev'));
     if (id === 'sh-join') setTimeout(() => $('lbRoom').focus(), 50);
+    if (id === 'sh-sync') renderSync();
   }
-  function closeSheets() { document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = true; }); $('cueHome').appendChild($('cuePrev')); refreshTiles(); }
+  function closeSheets() { if (lbBuilt) { prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs(); } document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = true; }); $('cueHome').appendChild($('cuePrev')); refreshTiles(); }
   // nội dung các ô trên sảnh
   function refreshTiles() {
     const av = $('lbAv'); av.textContent = '';
@@ -2687,6 +2903,9 @@
   }
   document.addEventListener('visibilitychange', keepAwake);
   document.addEventListener('pointerup', keepAwake, true);
+  // mở link/QR đồng bộ: nối máy này vào mã đó
+  let syncFromLink = null;
+  { const m = location.hash.match(/^#sync-([0-9A-Za-z]{10})$/); if (m) { syncFromLink = normCode(m[1]); history.replaceState(null, '', location.pathname + location.search); } }
   // mở lại app sau khi lỡ thoát: gợi ý vào lại phòng đang chơi
   { const lr = lastRoom(); if (lr && !location.hash && !(window.claude && window.claude.use)) history.replaceState(null, '', '#r-' + lr.code); }
   // Android: vuốt từ mép màn hình là lệnh "Quay lại". Khi đang ở bàn, chặn lại để không văng khỏi phòng.
@@ -2715,6 +2934,10 @@
   requestAnimationFrame(loop);
   buildLobby();
   openLobby('start');
+  if (syncFromLink && syncFromLink.length === 10 && syncOK()) {
+    if (!syncMeta || syncMeta.code !== syncFromLink) syncLinkCode(syncFromLink, false);
+    openSheet('sh-sync');
+  } else if (syncMeta) syncStart(false);
   {
     let go = null; try { go = sessionStorage.getItem('bida.go'); sessionStorage.removeItem('bida.go'); } catch (e) {}
     if (go === 'new' || go === 'join') lobbyGo();
