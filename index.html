@@ -217,6 +217,10 @@
     -webkit-backdrop-filter: blur(5px) saturate(1.1); backdrop-filter: blur(5px) saturate(1.1);
   }
   .app, .lobby { position: fixed; inset: auto; top: 0; left: 0; transform-origin: top left; }
+  /* iPhone (Safari/WebKit): khung "fixed" xoay 90° bị cắt theo khung chưa xoay, mất cột bên phải.
+     Dùng "absolute" + lớp riêng để Safari vẽ đủ toàn bộ khung sau khi xoay. */
+  html { overflow: hidden; }
+  .app.rot, .lobby.rot { position: absolute; will-change: transform; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
   .lb-wrap {
     box-sizing: border-box; height: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr; gap: 10px;
     padding-block: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
