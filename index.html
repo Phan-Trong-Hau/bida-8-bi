@@ -80,6 +80,13 @@
     50% { box-shadow: 0 0 0 5px rgba(216,169,79,.75), 0 0 16px rgba(240,200,110,.7); border-color: #f6d690; }
   }
   .who.empty .avatar { border-style: dashed; }
+  /* chấm kết nối trên avatar: xanh = đang kết nối, xám = mất kết nối */
+  .net {
+    position: absolute; top: 27px; left: -1px; width: 11px; height: 11px; border-radius: 50%; z-index: 1;
+    background: #4ad08a; border: 2px solid var(--room); box-shadow: 0 0 6px rgba(74,208,138,.6);
+  }
+  .who.off .net { background: #6b7480; box-shadow: none; }
+  .who.off .avatar { filter: grayscale(1); opacity: .5; }
   .who.mine::after {
     content: ""; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-radius: 50%;
     background: var(--chalk); border: 2px solid var(--room);
@@ -239,11 +246,11 @@
   .lb-stats .w { color: #1b1408; background: var(--brass); }
   .logo {
     margin: 0; font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5.2vw, 52px); letter-spacing: .06em; line-height: 1;
-    color: #ffe9b0; white-space: nowrap;
+    color: #ffe9b0; white-space: nowrap; display: flex; align-items: center; gap: .16em;
     text-shadow: 0 1px 0 #f0c769, 0 2px 0 #c8922e, 0 3px 0 #a87420, 0 4px 0 #7a5414, 0 9px 16px rgba(0,0,0,.7);
   }
   .logo8 {
-    display: inline-grid; place-items: center; width: 1.05em; height: 1.05em; margin: 0 .04em; border-radius: 50%; vertical-align: -.12em;
+    display: grid; place-items: center; flex: none; width: .92em; height: .92em; border-radius: 50%; margin-top: -.06em;
     background: radial-gradient(circle at 36% 30%, #555, #111 55%, #000); text-shadow: none;
     box-shadow: 0 5px 10px rgba(0,0,0,.6);
   }
@@ -295,6 +302,7 @@
   .btn3d:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--edge), 0 4px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.45); }
   .btn3d.blue { --c1: #6cbcf0; --c2: #2a6fb0; --edge: #163f66; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
   .btn3d.green { --c1: #72d896; --c2: #2a9150; --edge: #155a2f; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .btn3d.purple { --c1: #a98ae8; --c2: #6a46b8; --edge: #3a226e; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
   .btn3d.red { --c1: #f08b72; --c2: #c2412b; --edge: #6e1d10; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
   .sheet { position: absolute; inset: 0; z-index: 3; background: rgba(4,6,8,.45); animation: fadeIn .18s ease; }
   .sheet-card {
@@ -311,6 +319,20 @@
   .sheet-x { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; }
   .sheet .swatches { grid-template-columns: 1fr; }
   .sheet .balls { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  .prev-slot { display: block; width: 100%; }
+  .sheet .prev-slot .cueprev { height: 90px; border-radius: 12px; border: 1px solid var(--line); background: radial-gradient(ellipse at 50% 40%, #26313b, #12171b); }
+  .table-prev {
+    border-radius: 14px; padding: 12px; background: linear-gradient(180deg, #5a321f, #2e1910);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.15), 0 5px 0 rgba(0,0,0,.45);
+  }
+  .tp-felt { position: relative; aspect-ratio: 2 / 1; border-radius: 4px; box-shadow: inset 0 0 0 5px rgba(0,0,0,.28), inset 0 0 26px rgba(0,0,0,.45); transition: background .25s; }
+  .tp-felt i { position: absolute; width: 16px; height: 16px; margin: -8px; border-radius: 50%; background: radial-gradient(circle, #000 55%, #1d1d1d); }
+  .tp-felt .p1 { left: 0; top: 0; } .tp-felt .p2 { left: 50%; top: -2px; } .tp-felt .p3 { left: 100%; top: 0; }
+  .tp-felt .p4 { left: 0; top: 100%; } .tp-felt .p5 { left: 50%; top: calc(100% + 2px); } .tp-felt .p6 { left: 100%; top: 100%; }
+  .tp-felt b { position: absolute; width: 12px; height: 12px; margin: -6px; border-radius: 50%; box-shadow: inset -2px -2px 3px rgba(0,0,0,.4), 1px 2px 2px rgba(0,0,0,.4); }
+  .tp-felt .bw { left: 25%; top: 50%; background: #f4f1e8; } .tp-felt .b1 { left: 70%; top: 50%; background: #f0bf2a; }
+  .tp-felt .b2 { left: 74%; top: 42%; background: #1f4fb8; } .tp-felt .b3 { left: 74%; top: 58%; background: #d23a2a; }
+  .tp-felt .b8 { left: 78%; top: 50%; background: #141414; }
   .code-in {
     width: 100%; box-sizing: border-box; text-align: center; font: 700 44px/1 var(--display); letter-spacing: .5em; padding: 10px 0 10px .5em;
     border-radius: 14px; border: 2px solid var(--line); background: #0e1216; color: var(--brass); font-variant-numeric: tabular-nums;
@@ -390,7 +412,9 @@
     80% { transform: translateX(2px); }
   }
   #over:not([hidden]) #winAv { animation: winBounce 1s ease-in-out infinite; }
-  #over.lose .card { border-color: var(--line); }
+  #over.lose .card, #over.past .card { border-color: var(--line); }
+  #over.past h2 { color: var(--ink); font-size: 24px; }
+  #over.past #winAv { animation: none; }
   #over.lose h2 { color: var(--chalk); }
   #over.lose #winAv { animation: none; opacity: .8; }
   @keyframes winBounce {
@@ -447,7 +471,7 @@
   <div class="col" id="colL">
     <button class="reset" id="resetBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
     <button class="reset" id="gearBtn" aria-label="Tên, avatar, màu bàn và gậy" title="Tuỳ chỉnh">⚙&#xFE0E;</button>
-    <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><span class="clock" id="clock0" hidden></span><div class="rack" id="rack0"></div></div>
+    <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><span class="clock" id="clock0" hidden></span><span class="net" id="net0" hidden></span><div class="rack" id="rack0"></div></div>
     <div class="pull" id="pull" role="slider" tabindex="0" aria-label="Lực đánh — kéo rồi thả để đánh" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="pull-fill" id="pullFill"></div>
       <div class="pull-num" id="powerOut">0</div>
@@ -495,13 +519,13 @@
         <div class="avatar" id="winAv"></div>
         <h2 id="winTitle"></h2>
         <p class="note" id="winReason"></p>
-        <button class="primary" id="againBtn">Ván mới</button>
+        <div class="row"><button id="homeBtn" hidden>Về sảnh</button><button class="primary" id="againBtn">Ván mới</button></div>
       </div>
     </div>
   </div>
 
   <div class="col" id="colR">
-    <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><span class="clock" id="clock1" hidden></span><div class="rack" id="rack1"></div></div>
+    <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><span class="clock" id="clock1" hidden></span><span class="net" id="net1" hidden></span><div class="rack" id="rack1"></div></div>
     <button class="spin" id="spinBtn" aria-label="Điểm chạm cơ vào bi trắng" title="Điểm chạm cơ"><span class="spin-dot" id="spinDot"></span></button>
     <button class="reset" id="reactBtn" aria-label="Thả biểu cảm" title="Thả biểu cảm">😀</button>
     <div class="wheel" id="wheel" role="slider" tabindex="0" aria-label="Xoay gậy — kéo để xoay">
@@ -520,7 +544,7 @@
           <div class="lb-stats" id="lbStats"></div>
         </div>
       </div>
-      <h1 class="logo" aria-label="Bida 8 Bi">BIDA <span class="logo8" aria-hidden="true"><b>8</b></span> BI</h1>
+      <h1 class="logo" aria-label="Bida 8 Bi"><span>BIDA</span><span class="logo8" aria-hidden="true"><b>8</b></span><span>BI</span></h1>
       <div class="lb-icons">
         <button class="ic" id="lbInstall" hidden aria-label="Cài lên màn hình chính">📲</button>
         <button class="ic" data-open="sh-history" aria-label="Lịch sử đấu">🏆</button>
@@ -530,7 +554,7 @@
       <div class="lb-col">
         <button class="tile" data-open="sh-cue">
           <span class="tile-lbl">Gậy</span>
-          <canvas class="cueprev" id="cuePrev" aria-hidden="true"></canvas>
+          <span class="prev-slot" id="cueHome"><canvas class="cueprev" id="cuePrev" aria-hidden="true"></canvas></span>
           <span class="tile-val" id="tCue"></span>
         </button>
         <button class="tile" id="tFeltTile" data-open="sh-table">
@@ -542,6 +566,7 @@
       <div class="lb-center">
         <p class="lb-note" id="lbNote"></p>
         <button class="btn3d gold" id="lbGo">Tạo phòng<small>Mời bạn bằng mã 4 số</small></button>
+        <button class="btn3d purple" id="lbNew">Tạo phòng mới<small>Bỏ phòng cũ, lấy mã mới</small></button>
         <button class="btn3d blue" id="lbJoinOpen" data-open="sh-join">Vào phòng<small>Nhập mã phòng của bạn</small></button>
         <button class="btn3d green" id="lbBotOpen" data-open="sh-bot">Chơi với máy<small>Dễ · Vừa · Khó</small></button>
       </div>
@@ -565,10 +590,15 @@
   </div></div>
   <div class="sheet" id="sh-cue" hidden><div class="sheet-card">
     <div class="sheet-head"><h2>Chọn gậy</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="prev-slot" id="cueSlot"></div>
     <div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div>
   </div></div>
   <div class="sheet" id="sh-table" hidden><div class="sheet-card">
     <div class="sheet-head"><h2>Màu bàn</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="table-prev" id="feltPrev" aria-hidden="true">
+      <div class="tp-felt"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i><i class="p6"></i>
+        <b class="bw"></b><b class="b1"></b><b class="b2"></b><b class="b3"></b><b class="b8"></b></div>
+    </div>
     <div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div>
     <p class="lb-note">Màu bàn do người tạo phòng chọn.</p>
   </div></div>
@@ -1128,7 +1158,7 @@
         settled = true; online = true; hideLoading();
         if (!snap.exists) { if (canWrite !== false) createTable(); return; }
         onRemote(snap);
-        popup(joinEvent());
+        if (S.phase === 'over') { oldOver = S.event.id; renderUI(); } else popup(joinEvent());
         return;
       }
       onRemote(snap);
@@ -1143,6 +1173,19 @@
   const code4 = () => String(Math.floor(1000 + Math.random() * 9000));
   const topic = k => 'bida8/' + roomId + '/' + k;
   let retryRoom = () => {};
+  // ai đang kết nối: lần cuối nghe thấy từng người
+  const seen = {};
+  let joinedAt = 0;
+  function renderPresence() {
+    [0, 1].forEach(i => {
+      const id = S.seats['p' + i], dot = $('net' + i), who = $('who' + i);
+      if (!mq || !id) { dot.hidden = true; who.classList.remove('off'); return; }
+      const on = id === myId ? mq.connected
+        : seen[id] != null ? (seen[id] > 0 && Date.now() - seen[id] < 12000) : Date.now() - joinedAt < 8000;
+      dot.hidden = false; who.classList.toggle('off', !on);
+      dot.title = on ? 'Đang kết nối' : 'Mất kết nối';
+    });
+  }
   const roomLink = () => location.href.split('#')[0] + '#r-' + roomId;
   function mqSend(patch) {
     if (!mq || !mq.connected) return;
@@ -1172,7 +1215,7 @@
     roomId = m ? m[1] : code4();
     const enter = () => {
       history.replaceState(null, '', '#r-' + roomId);
-      mq.subscribe([topic('state'), topic('patch')], { qos: 1 }, () => {
+      mq.subscribe([topic('state'), topic('patch'), topic('hb')], { qos: 1 }, () => {
         if (gotState) return;
         // không có ván nào đang lưu cho phòng này: mình là người tạo phòng
         clearTimeout(createTimer);
@@ -1186,10 +1229,17 @@
       });
     };
     retryRoom = () => { // mã vừa chọn đang có ván khác: đổi mã
-      mq.unsubscribe([topic('state'), topic('patch')]);
+      mq.unsubscribe([topic('state'), topic('patch'), topic('hb')]);
       clearTimeout(createTimer); roomId = code4(); enter();
     };
-    mq = mqtt.connect(BROKER, { clientId: 'bida8_' + rid() + rid(), clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 30 });
+    mq = mqtt.connect(BROKER, {
+      clientId: 'bida8_' + rid() + rid(), clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 15,
+      // máy rớt mạng đột ngột: máy chủ tự báo cho người còn lại
+      will: { topic: 'bida8/' + roomId + '/hb', payload: JSON.stringify({ from: myId, off: true }), qos: 0, retain: false },
+    });
+    joinedAt = Date.now();
+    setInterval(() => { if (mq.connected && gotState) mq.publish(topic('hb'), JSON.stringify({ from: myId }), { qos: 0 }); }, 4000);
+    setInterval(renderPresence, 2000);
     mq.on('connect', () => {
       if (wasOffline) { wasOffline = false; popup({ kind: 'back' }); }
       enter();
@@ -1197,6 +1247,7 @@
     mq.on('message', (tp, buf) => {
       let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
       if (!msg || typeof msg !== 'object') return;
+      if (typeof msg.from === 'string' && msg.from !== myId) { seen[msg.from] = msg.off ? 0 : Date.now(); if (tp.endsWith('/hb')) { renderPresence(); return; } }
       if (tp.endsWith('/state') && msg.s) {
         if (!gotState && creating) {
           // tạo phòng mới: bỏ qua ván cũ đã bỏ (quá 6 tiếng), còn ván đang chơi thì đổi mã
@@ -1207,7 +1258,7 @@
           gotState = true; online = true; synced = false;
           applyRemote(normalize(msg.s)); hideLoading();
           claimIfFree();
-          popup(joinEvent());
+          if (S.phase === 'over') { oldOver = S.event.id; renderUI(); } else popup(joinEvent());
           if (!S.seats.p0 || !S.seats.p1) showInvite();
         } else if (msg.from !== myId) receive(normalize(msg.s));
       } else if (tp.endsWith('/patch') && msg.p && msg.from !== myId && gotState) {
@@ -1676,6 +1727,7 @@
     need8: 'phải chạm bi 8 trước', early8: 'chạm bi 8 khi chưa có nhóm bi', time: 'hết giờ',
   };
   const GROUP_TEXT = { solid: 'bi trơn (1–7)', stripe: 'bi sọc (9–15)' };
+  let oldOver = null; // id của ván đã kết thúc từ trước khi mình vào phòng
   const joinEvent = () => S.isBreak ? { kind: 'start', who: S.cur }
     : S.phase === 'place' ? { kind: 'foul', who: S.cur, fx: S.lastFoul ? { by: S.lastFoul.by, foul: S.lastFoul.code } : { by: 1 - S.cur } }
     : { kind: 'turn', who: S.cur };
@@ -1729,6 +1781,7 @@
 
   function renderUI() {
     if (S.felt !== appliedFelt) applyFelt(S.felt);
+    if (mq) renderPresence();
     const me = mySeat();
     [0, 1].forEach(i => {
       const el = $('who' + i), key = 'p' + i;
@@ -1768,9 +1821,11 @@
     $('over').hidden = S.phase !== 'over';
     if (S.phase === 'over') {
       paintAvatar($('winAv'), S.winner);
-      const meS = humanSeat(), lost = meS >= 0 && S.winner !== meS;
+      const meS = humanSeat(), lost = meS >= 0 && S.winner !== meS, past = oldOver && oldOver === S.event.id;
       $('over').classList.toggle('lose', lost);
-      $('winTitle').textContent = lost ? 'Bạn thua' : cap(whoName(S.winner)) + ' thắng';
+      $('winTitle').textContent = past ? 'Ván trước: ' + cap(whoName(S.winner)) + ' thắng' : lost ? 'Bạn thua' : cap(whoName(S.winner)) + ' thắng';
+      $('over').classList.toggle('past', !!past);
+      $('homeBtn').hidden = !(past && mq);
       const loser = cap(whoName(1 - S.winner));
       $('winReason').textContent = (lost ? cap(whoName(S.winner)) + ' thắng · ' : '') + (S.reason === 'clean' ? cap(whoName(S.winner)) + ' đưa bi 8 vào lỗ đúng luật'
         : S.reason === 'early' ? loser + ' đưa bi 8 vào lỗ quá sớm'
@@ -1931,6 +1986,8 @@
   $('cfNo').addEventListener('click', () => { $('confirmReset').hidden = true; });
   $('cfYes').addEventListener('click', () => { $('confirmReset').hidden = true; pressReset(); });
   $('againBtn').addEventListener('click', pressReset);
+  // về sảnh: bỏ mã phòng cũ khỏi đường link rồi tải lại
+  $('homeBtn').addEventListener('click', () => { history.replaceState(null, '', location.pathname + location.search); location.reload(); });
   $('yesBtn').addEventListener('click', pressReset);
   $('noBtn').addEventListener('click', declineReset);
 
@@ -2236,6 +2293,7 @@
     swatch($('lbFelts'), FELTS, 'felt', 'felt');
     swatch($('lbCues'), CUES, 'cue', 'cue');
     $('lbGo').addEventListener('click', lobbyGo);
+    $('lbNew').addEventListener('click', () => { history.replaceState(null, '', location.pathname + location.search); lobbyGo(); });
     for (const b of $('lbAim').children) b.addEventListener('click', () => { prefs.longAim = b.dataset.k === 'true'; pressList($('lbAim'), String(prefs.longAim)); savePrefs(); refreshTiles(); });
     for (const b of $('lbBots').children) b.addEventListener('click', () => {
       prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs(); applyCue(prefs.cue);
@@ -2266,9 +2324,11 @@
   }
   function openSheet(id) {
     document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = sh.id !== id; });
+    // gậy 3D chuyển vào bảng chọn để xem trước ngay khi bấm mẫu khác
+    (id === 'sh-cue' ? $('cueSlot') : $('cueHome')).appendChild($('cuePrev'));
     if (id === 'sh-join') setTimeout(() => $('lbRoom').focus(), 50);
   }
-  function closeSheets() { document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = true; }); refreshTiles(); }
+  function closeSheets() { document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = true; }); $('cueHome').appendChild($('cuePrev')); refreshTiles(); }
   // nội dung các ô trên sảnh
   function refreshTiles() {
     const av = $('lbAv'); av.textContent = '';
@@ -2278,6 +2338,8 @@
     const inGame = lobbyMode !== 'start' && online;
     const f = FELTS[inGame ? S.felt : prefs.felt] || FELTS.navy;
     $('tFeltChip').style.background = `radial-gradient(ellipse at 50% 40%, ${hexCss(f.felt)}, ${hexCss(f.cush)})`;
+    const pf = FELTS[prefs.felt] || f;
+    document.querySelector('#feltPrev .tp-felt').style.background = `radial-gradient(ellipse at 50% 45%, ${hexCss(pf.felt)}, ${hexCss(pf.cush)})`;
     $('tFelt').textContent = f.name;
     const tm = inGame ? S.timer : prefs.timer, tl = (TIMERS.find(([v]) => v === tm) || TIMERS[0])[1];
     const rows = $('tRules'); rows.textContent = '';
@@ -2330,20 +2392,23 @@
     paintCuePreview(prefs.cue);
     requestAnimationFrame(cuePreviewLoop);
     pressList($('lbBalls'), avKey(prefs.av)); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
-    const canFelt = start ? !invited() : (!online || mySeat() === 0);
+    const canFelt = start ? true : (!online || mySeat() === 0);
     $('tFeltTile').disabled = !canFelt;
     $('lbTimerField').hidden = !canFelt;
     pressList($('lbAim'), String(prefs.longAim));
     pressList($('lbTimers'), start ? prefs.timer : (online ? S.timer : prefs.timer));
     updateInstall();
     renderHistory();
-    $('lbJoinOpen').hidden = !(start && net && !invited());
+    $('lbJoinOpen').hidden = !(start && net);
+    $('lbNew').hidden = !(start && net && invited());
+    $('lbJoinOpen').firstChild.textContent = invited() ? 'Vào phòng khác' : 'Vào phòng';
     $('lbBotOpen').hidden = !start;
     $('lbErr').hidden = true;
     const code = (location.hash.match(/^#r-([a-z0-9]+)$/) || [])[1];
-    $('lbNote').textContent = start && invited() ? 'Bạn được mời vào phòng ' + code : '';
+    $('lbNote').textContent = '';
     $('lbGo').innerHTML = !start ? 'Tiếp tục<small>Quay lại bàn đang chơi</small>'
-      : invited() || (window.claude && window.claude.use) ? 'Vào bàn<small>Bàn đang chờ bạn</small>'
+      : invited() ? 'Vào phòng ' + code + '<small>Bàn bạn được mời hoặc đang chơi dở</small>'
+      : (window.claude && window.claude.use) ? 'Vào bàn<small>Bàn đang chờ bạn</small>'
       : net ? 'Tạo phòng<small>Mời bạn bằng mã 4 số</small>' : 'Chơi chung máy<small>Hai người thay phiên trên máy này</small>';
     closeSheets();
     $('lobby').hidden = false;
