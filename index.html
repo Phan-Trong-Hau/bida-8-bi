@@ -216,7 +216,7 @@
       radial-gradient(ellipse at 50% 50%, rgba(10,14,18,.55), rgba(6,8,10,.94) 80%);
     -webkit-backdrop-filter: blur(5px) saturate(1.1); backdrop-filter: blur(5px) saturate(1.1);
   }
-  .lobby.rot { inset: auto; top: 0; left: 0; transform-origin: top left; transform: rotate(90deg) translateY(-100%); }
+  .app, .lobby { position: fixed; inset: auto; top: 0; left: 0; transform-origin: top left; }
   .lb-wrap {
     box-sizing: border-box; height: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr; gap: 10px;
     padding-block: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
@@ -1439,6 +1439,16 @@
   slab(railShape, 0, RAIL_H, woodM, 3);
   slab(roundRectShape(-E - 4, -E - 4, W + E + 4, H + E + 4, 42), -110, 104, woodDarkM, 4);
   // lỗ
+  // sàn phòng bida dưới bàn: quầng đèn ấm giữa phòng, tối dần ra mép, có vân thảm nhẹ
+  {
+    const c = document.createElement('canvas'); c.width = c.height = 512;
+    const g = c.getContext('2d'), grd = g.createRadialGradient(256, 256, 20, 256, 256, 256);
+    grd.addColorStop(0, '#2c3a47'); grd.addColorStop(.35, '#1d2731'); grd.addColorStop(.7, '#131a20'); grd.addColorStop(1, '#0e1216');
+    g.fillStyle = grd; g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * .025})`; g.fillRect(Math.random() * 512, Math.random() * 512, 1, 1); }
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(3200, 2000), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = -112; scene.add(floor);
+  }
   // lỗ: đĩa tối dần vào tâm, vẽ đè lên nỉ và gỗ; bi vẽ sau nên lăn được vào miệng lỗ
   const pocketM = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -1742,7 +1752,7 @@
   const CONFETTI = ['#f0bf2a', '#1f4fb8', '#d23a2a', '#5b2a86', '#ee7a20', '#1d8a4b', '#ffe39a', '#f4f1e8', '#84c6e8'];
   function confetti(count, fromY = .35) {
     if (reduceMotion) return;
-    const r = fxc.getBoundingClientRect(), k = Math.min(window.devicePixelRatio || 1, 2);
+    const k = Math.min(window.devicePixelRatio || 1, 2) * uiScale;
     const w = fxc.clientWidth, h = fxc.clientHeight;
     if (fxc.width !== Math.round(w * k)) { fxc.width = Math.round(w * k); fxc.height = Math.round(h * k); }
     for (let i = 0; i < count; i++) parts.push({
@@ -1754,7 +1764,7 @@
   // mưa rơi nhẹ cho người thua
   function rain(count) {
     if (reduceMotion) return;
-    const k = Math.min(window.devicePixelRatio || 1, 2), w = fxc.clientWidth, h = fxc.clientHeight;
+    const k = Math.min(window.devicePixelRatio || 1, 2) * uiScale, w = fxc.clientWidth, h = fxc.clientHeight;
     if (fxc.width !== Math.round(w * k)) { fxc.width = Math.round(w * k); fxc.height = Math.round(h * k); }
     for (let i = 0; i < count; i++) parts.push({
       drop: true, x: Math.random() * w, y: -20 - Math.random() * h * .8, vx: -.3, vy: 3 + Math.random() * 2,
@@ -1929,20 +1939,24 @@
   }
 
   // ---------- Kích thước ----------
+  // Thiết kế theo khung ngang của điện thoại (cao ~390, rộng tối thiểu ~700) rồi phóng đều cho kín màn hình,
+  // nên laptop thấy giao diện to như game mobile thay vì nhỏ giữa nhiều khoảng trống.
+  let uiScale = 1;
+  const pixelRatio = () => Math.min((quality >= 1 ? 1.25 : Math.min(window.devicePixelRatio || 1, 2)) * uiScale, 3);
   function layout() {
     rot = window.innerWidth < window.innerHeight && window.innerWidth < 900;
     vert = false;
-    const app = $('app');
-    app.classList.toggle('rot', rot);
-    const lb = $('lobby');
-    lb.classList.toggle('rot', rot);
-    lb.style.width = rot ? window.innerHeight + 'px' : '';
-    lb.style.height = rot ? window.innerWidth + 'px' : '';
-    const lbW = rot ? window.innerHeight : window.innerWidth, lbH = rot ? window.innerWidth : window.innerHeight;
-    lb.classList.toggle('short', lbH < 360);
-    lb.classList.toggle('narrow', lbW < 560);
-    app.style.width = rot ? window.innerHeight + 'px' : '';
-    app.style.height = rot ? window.innerWidth + 'px' : '';
+    const vw = rot ? window.innerHeight : window.innerWidth, vh = rot ? window.innerWidth : window.innerHeight;
+    uiScale = Math.max(1, Math.min(vh / 390, vw / 700, 2.6));
+    const lw = vw / uiScale, lh = vh / uiScale;
+    const app = $('app'), lb = $('lobby');
+    for (const el of [app, lb]) {
+      el.classList.toggle('rot', rot);
+      el.style.width = lw + 'px'; el.style.height = lh + 'px';
+      el.style.transform = (rot ? `rotate(90deg) translateY(-${vh}px) ` : '') + `scale(${uiScale})`;
+    }
+    lb.classList.toggle('short', lh < 360);
+    lb.classList.toggle('narrow', lw < 560);
     app.classList.toggle('vert', false); // cột hai bên ở cả hai chiều màn hình
     const cs = getComputedStyle(app);
     const iw = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -1950,11 +1964,13 @@
     const w = Math.max(120, iw - 2 * 46 - 2 * 6);
     const h = Math.max(160, ih);
     canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    renderer.setPixelRatio(pixelRatio());
     renderer.setSize(w, h, false);
     fitCamera(w, h);
     for (const c of document.querySelectorAll('.col')) c.style.height = h + 'px';
     setPower(power);
   }
+
 
   // ---------- Điều khiển ----------
   const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -2093,7 +2109,7 @@
     if (slowFrames + fastFrames < 90) return;
     if (slowFrames > 45 && quality < 2) {
       quality++;
-      if (quality === 1) { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)); layout(); }
+      if (quality === 1) layout();
       if (quality === 2) { renderer.shadowMap.enabled = false; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
     }
     slowFrames = fastFrames = 0;
@@ -2483,6 +2499,8 @@
   function cuePreviewLoop(t) {
     if ($('lobby').hidden || !cpR) return;
     const cv = $('cuePrev'), w = cv.clientWidth, h = cv.clientHeight;
+    const pr = Math.min(Math.min(window.devicePixelRatio || 1, 2) * uiScale, 3);
+    if (cpR.getPixelRatio() !== pr) cpR.setPixelRatio(pr);
     if (cv.width !== Math.round(w * cpR.getPixelRatio())) {
       cpR.setSize(w, h, false);
       const half = 230, vh = half * h / w; Object.assign(cpCam, { left: -half, right: half, top: vh, bottom: -vh }); cpCam.updateProjectionMatrix();
