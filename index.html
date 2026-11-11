@@ -514,6 +514,13 @@
         <div class="row"><button id="cfNo">Huỷ</button><button class="primary" id="cfYes">Xếp lại</button></div>
       </div>
     </div>
+    <div class="modal" id="confirmExit" hidden>
+      <div class="card">
+        <h2>Thoát khỏi bàn?</h2>
+        <p class="note" id="exitNote"></p>
+        <div class="row"><button id="exNo">Ở lại</button><button class="primary" id="exYes">Thoát</button></div>
+      </div>
+    </div>
     <div class="modal" id="ask" hidden>
       <div class="card">
         <div class="avatar" id="askAv"></div>
@@ -532,6 +539,7 @@
   </div>
 
   <div class="col" id="colR">
+    <button class="reset" id="exitBtn" aria-label="Thoát khỏi bàn" title="Thoát khỏi bàn">✕</button>
     <div class="who" id="who1"><div class="avatar" id="av1">2</div><span class="wins" id="wins1">0</span><span class="clock" id="clock1" hidden></span><span class="net" id="net1" hidden></span><div class="rack" id="rack1"></div></div>
     <button class="spin" id="spinBtn" aria-label="Điểm chạm cơ vào bi trắng" title="Điểm chạm cơ"><span class="spin-dot" id="spinDot"></span></button>
     <button class="reset" id="reactBtn" aria-label="Thả biểu cảm" title="Thả biểu cảm">😀</button>
@@ -802,7 +810,7 @@
       wins: sideObj(d.wins, v => Number.isInteger(v) && v >= 0 && v < 1e5 ? v : 0),
       seats: sideObj(d.seats, v => typeof v === 'string' && v && v.length <= 64 ? v : null),
       reset: sideObj(d.reset, v => v === true),
-      players: sideObj(d.players, v => v && typeof v === 'object' ? { name: str(v.name, 16), av: cleanAv(v.av, v.ball) } : null),
+      players: sideObj(d.players, v => v && typeof v === 'object' ? { name: str(v.name, 16), av: cleanAv(v.av, v.ball), cue: CUES[v.cue] ? v.cue : undefined } : null),
       felt: FELTS[d.felt] ? d.felt : 'navy', timer: validTimer(+d.timer),
       streak: d.streak && typeof d.streak === 'object' ? { who: d.streak.who === 0 || d.streak.who === 1 ? d.streak.who : -1, n: Number.isInteger(d.streak.n) ? Math.max(0, Math.min(99, d.streak.n)) : 0 } : { who: -1, n: 0 },
       event: { id: str(ev.id, 32), kind: str(ev.kind, 16) || 'start', who: ev.who === 0 || ev.who === 1 ? ev.who : 0, fx: cleanFx(ev.fx) },
@@ -1570,8 +1578,10 @@
   stickPart(292, 430, 3.8, 5, 0x2b170c);
   stickInner.rotation.z = -0.1;
   const stickMats = stickInner.children.map(m => m.material); // đầu, khâu, thân, khoen, chuôi
+  let shownCue = '';
   function applyCue(key) {
-    const c = CUES[key] || CUES.maple;
+    if (!CUES[key]) key = 'maple';
+    const c = CUES[key]; shownCue = key;
     stickMats[2].color.setHex(c.shaft); stickMats[3].color.setHex(c.ring); stickMats[4].color.setHex(c.butt);
   }
   let appliedFelt = 'navy';
@@ -1694,6 +1704,12 @@
     scene.add(m); pocketFx.push({ m, t0: performance.now() });
   }
   let lastStick = performance.now();
+  // gậy trên bàn mang màu gậy của người đang tới lượt
+  function turnCue() {
+    if (online) { const pl = S.players['p' + S.cur]; return pl && CUES[pl.cue] ? pl.cue : S.cur === mySeat() ? prefs.cue : 'maple'; }
+    if (botMode && S.cur === 1) return prefs.cue === 'carbon' ? 'ruby' : 'carbon';
+    return prefs.cue;
+  }
   function render3D(now) {
     for (let i = pocketFx.length - 1; i >= 0; i--) {
       const f = pocketFx[i], a = (now - f.t0) / 550;
@@ -1708,6 +1724,7 @@
     else if (botShowing && balls[0].on) placeStick(aim, power, spin); // máy đang ngắm: chỉ hiện gậy
     stick.visible = aiming || (botShowing && balls[0].on) || remoteStick(now, now - lastStick);
     lastStick = now;
+    if (stick.visible && turnCue() !== shownCue) applyCue(turnCue());
     const placing = canPlace();
     kitchen.visible = placing && S.isBreak;
     handRing.visible = placing && balls[0].on && !cueDrag;
@@ -1774,8 +1791,8 @@
     if (!online || !started) return;
     const me = mySeat(); if (me < 0) return;
     const cur = S.players['p' + me] || {};
-    if (cur.name !== prefs.name || avKey(cleanAv(cur.av, cur.ball)) !== avKey(prefs.av))
-      commit({ players: { ['p' + me]: { name: prefs.name, av: prefs.av } } });
+    if (cur.name !== prefs.name || avKey(cleanAv(cur.av, cur.ball)) !== avKey(prefs.av) || cur.cue !== prefs.cue)
+      commit({ players: { ['p' + me]: { name: prefs.name, av: prefs.av, cue: prefs.cue } } });
   }
 
   function paintAvatar(el, i) {
@@ -2134,6 +2151,23 @@
     $('confirmReset').hidden = false;
   });
   $('cfNo').addEventListener('click', () => { $('confirmReset').hidden = true; });
+  // nút thoát: đang chơi dở thì hỏi lại trước khi rời bàn
+  function leaveTable() {
+    try { if (mq && mq.connected) mq.publish(topic('hb'), JSON.stringify({ from: myId, off: true }), { qos: 0 }); } catch (e) {}
+    forgetRoom();
+    history.replaceState(null, '', location.pathname + location.search);
+    setTimeout(() => location.reload(), 150);
+  }
+  $('exitBtn').addEventListener('click', () => {
+    if (S.phase === 'over' || (online && mySeat() < 0)) { leaveTable(); return; }
+    const oid = online && mySeat() >= 0 ? S.seats['p' + (1 - mySeat())] : null;
+    $('exitNote').textContent = online
+      ? (oid ? 'Ván đang chơi dở. ' + cap(whoName(1 - mySeat())) + ' sẽ thấy bạn đã rời bàn.' : 'Phòng ' + roomId + ' sẽ bị bỏ lại.')
+      : 'Ván đang chơi sẽ không được lưu lại.';
+    $('confirmExit').hidden = false;
+  });
+  $('exNo').addEventListener('click', () => { $('confirmExit').hidden = true; });
+  $('exYes').addEventListener('click', () => { $('confirmExit').hidden = true; leaveTable(); });
   $('cfYes').addEventListener('click', () => { $('confirmReset').hidden = true; pressReset(); });
   $('againBtn').addEventListener('click', pressReset);
   // về sảnh: bỏ mã phòng cũ khỏi đường link rồi tải lại
@@ -2269,7 +2303,7 @@
     commit({ balls: serialBalls(), seq: S.seq + 1 });
   }
   function botTick(now) {
-    if (!botMode || !started || sim || S.cur !== 1 || (S.phase !== 'aim' && S.phase !== 'place') || !$('confirmReset').hidden) { botPlan = null; botShowing = false; return; }
+    if (!botMode || !started || sim || S.cur !== 1 || (S.phase !== 'aim' && S.phase !== 'place') || !$('confirmReset').hidden || !$('confirmExit').hidden) { botPlan = null; botShowing = false; return; }
     const key = S.event.id;
     if (!botPlan || botPlan.key !== key) botPlan = { key, t0: now, step: 0, placed: false };
     const e = now - botPlan.t0;
@@ -2618,6 +2652,14 @@
   }
   $('gearBtn').addEventListener('click', () => openLobby('settings'));
 
+  // giữ màn hình sáng khi đang ở bàn
+  let wakeLock = null;
+  async function keepAwake() {
+    if (!inGame() || document.visibilityState !== 'visible' || wakeLock || !navigator.wakeLock) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', keepAwake);
+  document.addEventListener('pointerup', keepAwake, true);
   // mở lại app sau khi lỡ thoát: gợi ý vào lại phòng đang chơi
   { const lr = lastRoom(); if (lr && !location.hash && !(window.claude && window.claude.use)) history.replaceState(null, '', '#r-' + lr.code); }
   // Android: vuốt từ mép màn hình là lệnh "Quay lại". Khi đang ở bàn, chặn lại để không văng khỏi phòng.
