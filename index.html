@@ -201,7 +201,134 @@
   .install { display: grid; gap: 6px; }
   .install button { width: 100%; }
   .install .lb-note { margin: 0; }
-  .lb-go { width: 100%; min-height: 52px; font-size: 17px; }
+  /* ===== Sảnh kiểu game mobile: nằm ngang, nền bàn 3D mờ phía sau, nút nổi khối ===== */
+  .lobby {
+    overflow: hidden; padding: 0;
+    background:
+      radial-gradient(ellipse 70% 60% at 50% 45%, rgba(26,67,112,.35), transparent 70%),
+      radial-gradient(ellipse at 50% 50%, rgba(10,14,18,.55), rgba(6,8,10,.94) 80%);
+    -webkit-backdrop-filter: blur(5px) saturate(1.1); backdrop-filter: blur(5px) saturate(1.1);
+  }
+  .lobby.rot { inset: auto; top: 0; left: 0; transform-origin: top left; transform: rotate(90deg) translateY(-100%); }
+  .lb-wrap {
+    box-sizing: border-box; height: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr; gap: 10px;
+    padding-block: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow-y: auto;
+  }
+  .lb-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .lb-me {
+    display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 12px 6px 6px; border-radius: 40px; justify-self: start;
+    background: linear-gradient(180deg, rgba(44,56,68,.95), rgba(24,30,36,.95)); border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 4px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .lb-av { position: relative; padding: 0; min-height: 0; border: 0; background: none; border-radius: 50%; }
+  .lb-av .avatar { width: 48px; height: 48px; border: 3px solid var(--brass); color: var(--brass); font-size: 24px; box-shadow: 0 0 0 3px rgba(216,169,79,.25); }
+  .lb-edit {
+    position: absolute; right: -3px; bottom: -3px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 11px; background: var(--brass); color: #1b1408; box-shadow: 0 2px 0 #7a5414;
+  }
+  .lb-meinfo { display: grid; gap: 3px; min-width: 0; }
+  .lb-meinfo input {
+    width: 150px; max-width: 100%; min-width: 0; font: 700 18px/1.1 var(--display); letter-spacing: .03em; color: var(--ink);
+    background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.2); padding: 0 0 2px; border-radius: 0;
+  }
+  .lb-meinfo input:focus { outline: none; border-bottom-color: var(--brass); }
+  .lb-stats { display: flex; gap: 6px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .lb-stats span { padding: 1px 7px; border-radius: 8px; background: rgba(0,0,0,.35); color: var(--muted); }
+  .lb-stats .w { color: #1b1408; background: var(--brass); }
+  .logo {
+    margin: 0; font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5.2vw, 52px); letter-spacing: .06em; line-height: 1;
+    color: #ffe9b0; white-space: nowrap;
+    text-shadow: 0 1px 0 #f0c769, 0 2px 0 #c8922e, 0 3px 0 #a87420, 0 4px 0 #7a5414, 0 9px 16px rgba(0,0,0,.7);
+  }
+  .logo8 {
+    display: inline-grid; place-items: center; width: 1.05em; height: 1.05em; margin: 0 .04em; border-radius: 50%; vertical-align: -.12em;
+    background: radial-gradient(circle at 36% 30%, #555, #111 55%, #000); text-shadow: none;
+    box-shadow: 0 5px 10px rgba(0,0,0,.6);
+  }
+  .logo8 b {
+    display: grid; place-items: center; width: 52%; height: 52%; border-radius: 50%; background: #f4f1e8;
+    color: #111; font-size: .46em; line-height: 1; letter-spacing: 0;
+  }
+  .lb-icons { justify-self: end; display: flex; gap: 8px; }
+  .ic {
+    width: 46px; height: 46px; min-height: 0; padding: 0; border-radius: 50%; font-size: 21px; border: 1px solid rgba(255,255,255,.1);
+    background: linear-gradient(180deg, #33414e, #1c242b); box-shadow: 0 4px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .ic:active, .tile:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.5); }
+  .lb-main { display: grid; grid-template-columns: 1fr minmax(220px, 1.15fr) 1fr; gap: 14px; align-items: stretch; min-height: 0; }
+  .lb-col { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; min-width: 0; }
+  .tile {
+    position: relative; display: grid; align-content: space-between; justify-items: start; gap: 6px; padding: 10px 12px; min-width: 0; min-height: 0;
+    text-align: left; color: var(--ink); border-radius: 18px; border: 1px solid rgba(255,255,255,.08);
+    background: linear-gradient(180deg, rgba(46,58,70,.94), rgba(22,28,34,.94));
+    box-shadow: 0 5px 0 rgba(0,0,0,.5), 0 10px 18px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.1);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .tile:disabled { opacity: .55; cursor: default; }
+  .tile::after { content: "›"; position: absolute; right: 12px; top: 6px; font-size: 22px; color: var(--muted); }
+  .tile-lbl { font: 700 13px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .tile-val { font: 700 18px/1.1 var(--display); letter-spacing: .03em; }
+  .tile-big { font: 700 22px/1.1 var(--display); letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+  .tile-big b { color: var(--brass); }
+  .tile-rows { display: grid; gap: 4px; font-size: 14px; font-weight: 500; }
+  .tile .cueprev { height: 52px; border: 0; background: none; }
+  .felt-mini {
+    position: relative; width: 100%; max-width: 150px; height: 46px; border-radius: 9px; border: 5px solid #3a1f13;
+    box-shadow: inset 0 0 12px rgba(0,0,0,.45), 0 3px 0 rgba(0,0,0,.4);
+  }
+  .felt-mini i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #050505; }
+  .felt-mini i:nth-child(1) { left: -4px; top: -4px; } .felt-mini i:nth-child(2) { left: calc(50% - 4px); top: -5px; } .felt-mini i:nth-child(3) { right: -4px; bottom: -4px; }
+  .lb-center { display: grid; align-content: center; gap: 12px; min-width: 0; }
+  .lb-center .lb-note { margin: 0; text-align: center; }
+  .btn3d {
+    --c1: #f6cf73; --c2: #c8922e; --edge: #7a5414;
+    display: grid; justify-items: center; gap: 2px; width: 100%; min-height: 58px; padding: 9px 16px; border: 0; border-radius: 16px;
+    font: 700 24px/1 var(--display); letter-spacing: .07em; text-transform: uppercase; color: #2a1a04;
+    background: linear-gradient(180deg, var(--c1), var(--c2));
+    box-shadow: 0 6px 0 var(--edge), 0 12px 20px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.12);
+    text-shadow: 0 1px 0 rgba(255,255,255,.35); transition: transform .08s, box-shadow .08s;
+  }
+  .btn3d small { font: 600 12px/1.2 var(--body); letter-spacing: 0; text-transform: none; opacity: .8; }
+  .btn3d:hover { filter: brightness(1.06); }
+  .btn3d:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--edge), 0 4px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.45); }
+  .btn3d.blue { --c1: #6cbcf0; --c2: #2a6fb0; --edge: #163f66; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .btn3d.green { --c1: #72d896; --c2: #2a9150; --edge: #155a2f; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .btn3d.red { --c1: #f08b72; --c2: #c2412b; --edge: #6e1d10; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .sheet { position: absolute; inset: 0; z-index: 3; background: rgba(4,6,8,.45); animation: fadeIn .18s ease; }
+  .sheet-card {
+    position: absolute; top: 0; right: 0; bottom: 0; width: min(440px, 58%); box-sizing: border-box; overflow-y: auto;
+    display: grid; align-content: start; gap: 12px;
+    padding-block: max(14px, env(safe-area-inset-top, 0px)) 18px;
+    padding-left: 18px; padding-right: max(18px, env(safe-area-inset-right, 0px));
+    background: linear-gradient(180deg, #222b33, #151a1f); border-left: 1px solid rgba(255,255,255,.08);
+    box-shadow: -14px 0 30px rgba(0,0,0,.5); animation: slideIn .22s cubic-bezier(.2,.9,.3,1);
+  }
+  .rot .sheet-card { padding-right: max(18px, env(safe-area-inset-bottom, 0px)); }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sheet-head h2 { margin: 0; font: 700 26px/1 var(--display); letter-spacing: .05em; text-transform: uppercase; color: #ffe39a; text-shadow: 0 2px 0 #7a5414; }
+  .sheet-x { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; }
+  .sheet .swatches { grid-template-columns: 1fr; }
+  .sheet .balls { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  .code-in {
+    width: 100%; box-sizing: border-box; text-align: center; font: 700 44px/1 var(--display); letter-spacing: .5em; padding: 10px 0 10px .5em;
+    border-radius: 14px; border: 2px solid var(--line); background: #0e1216; color: var(--brass); font-variant-numeric: tabular-nums;
+  }
+  .code-in:focus { outline: none; border-color: var(--brass); }
+  .bots { display: grid; gap: 14px; }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  /* cỡ màn tính theo khung sảnh (đã xoay), không theo chiều thật của điện thoại */
+  .lobby.short .btn3d { min-height: 48px; font-size: 20px; }
+  .lobby.short .btn3d small { display: none; }
+  .lobby.short .lb-av .avatar { width: 40px; height: 40px; }
+  .lobby.narrow .lb-main { grid-template-columns: 1fr; }
+  .lobby.narrow .lb-col { grid-template-rows: none; grid-template-columns: 1fr 1fr; }
+  .lobby.narrow .lb-top { grid-template-columns: 1fr auto; }
+  .lobby.narrow .logo { display: none; }
+  .lobby.narrow .sheet-card { width: 100%; }
+  @media (prefers-reduced-motion: reduce) { .sheet, .sheet-card { animation: none; } }
   .reset { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); flex: none; }
   .reset.waiting { color: var(--brass); border-color: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(216,169,79,.25); } }
@@ -384,34 +511,98 @@
 </div>
 
 <div class="lobby" id="lobby" hidden>
-  <div class="lobby-card">
-    <h1>Bida <span>8</span> Bi</h1>
-    <p class="lb-note" id="lbNote"></p>
-    <div class="field"><label class="lbl" for="lbName">Tên của bạn</label><input id="lbName" maxlength="16" autocomplete="nickname" placeholder="Nhập tên"></div>
-    <div class="field"><span class="lbl">Avatar</span><div class="balls" id="lbBalls" role="group" aria-label="Chọn bi làm avatar"></div></div>
-    <div class="field" id="lbTimerField"><span class="lbl">Thời gian mỗi lượt</span><div class="chips" id="lbTimers" role="group" aria-label="Thời gian mỗi lượt"></div></div>
-    <div class="field" id="lbFeltField"><span class="lbl">Màu bàn</span><div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div></div>
-    <div class="field"><span class="lbl">Gậy</span><canvas class="cueprev" id="cuePrev" aria-label="Xem trước gậy"></canvas><div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div></div>
+  <div class="lb-wrap">
+    <header class="lb-top">
+      <div class="lb-me">
+        <button class="lb-av" id="lbAvBtn" data-open="sh-avatar" aria-label="Đổi avatar"><span class="avatar" id="lbAv"></span><span class="lb-edit" aria-hidden="true">✎</span></button>
+        <div class="lb-meinfo">
+          <input id="lbName" maxlength="16" autocomplete="nickname" placeholder="Nhập tên của bạn" aria-label="Tên của bạn">
+          <div class="lb-stats" id="lbStats"></div>
+        </div>
+      </div>
+      <h1 class="logo" aria-label="Bida 8 Bi">BIDA <span class="logo8" aria-hidden="true"><b>8</b></span> BI</h1>
+      <div class="lb-icons">
+        <button class="ic" id="lbInstall" hidden aria-label="Cài lên màn hình chính">📲</button>
+        <button class="ic" data-open="sh-history" aria-label="Lịch sử đấu">🏆</button>
+      </div>
+    </header>
+    <main class="lb-main">
+      <div class="lb-col">
+        <button class="tile" data-open="sh-cue">
+          <span class="tile-lbl">Gậy</span>
+          <canvas class="cueprev" id="cuePrev" aria-hidden="true"></canvas>
+          <span class="tile-val" id="tCue"></span>
+        </button>
+        <button class="tile" id="tFeltTile" data-open="sh-table">
+          <span class="tile-lbl">Bàn</span>
+          <span class="felt-mini" id="tFeltChip"><i></i><i></i><i></i></span>
+          <span class="tile-val" id="tFelt"></span>
+        </button>
+      </div>
+      <div class="lb-center">
+        <p class="lb-note" id="lbNote"></p>
+        <button class="btn3d gold" id="lbGo">Tạo phòng<small>Mời bạn bằng mã 4 số</small></button>
+        <button class="btn3d blue" id="lbJoinOpen" data-open="sh-join">Vào phòng<small>Nhập mã phòng của bạn</small></button>
+        <button class="btn3d green" id="lbBotOpen" data-open="sh-bot">Chơi với máy<small>Dễ · Vừa · Khó</small></button>
+      </div>
+      <div class="lb-col">
+        <button class="tile" id="tRulesTile" data-open="sh-rules">
+          <span class="tile-lbl">Luật chơi</span>
+          <span class="tile-rows" id="tRules"></span>
+        </button>
+        <button class="tile" data-open="sh-history">
+          <span class="tile-lbl">Lịch sử đấu</span>
+          <span class="tile-big" id="hSum"></span>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <div class="sheet" id="sh-avatar" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Chọn avatar</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="balls" id="lbBalls" role="group" aria-label="Chọn avatar"></div>
     <input type="file" id="lbFile" accept="image/*" hidden>
-    <div class="field" id="lbRoomField"><label class="lbl" for="lbRoom">Có mã phòng? Nhập để vào</label>
-      <div class="roomrow"><input id="lbRoom" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 số" autocomplete="off"><button id="lbJoin">Vào phòng</button></div>
-      <p class="lb-err" id="lbErr" hidden>Mã phòng gồm 4 chữ số.</p>
-    </div>
+  </div></div>
+  <div class="sheet" id="sh-cue" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Chọn gậy</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="swatches" id="lbCues" role="group" aria-label="Màu gậy"></div>
+  </div></div>
+  <div class="sheet" id="sh-table" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Màu bàn</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="swatches" id="lbFelts" role="group" aria-label="Màu bàn"></div>
+    <p class="lb-note">Màu bàn do người tạo phòng chọn.</p>
+  </div></div>
+  <div class="sheet" id="sh-rules" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Luật chơi</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="field" id="lbTimerField"><span class="lbl">Thời gian mỗi lượt</span><div class="chips" id="lbTimers" role="group" aria-label="Thời gian mỗi lượt"></div></div>
     <div class="field" id="lbAimField"><span class="lbl">Đường ngắm</span><div class="chips" id="lbAim" role="group" aria-label="Đường ngắm">
       <button data-k="true">Dài, có bật băng</button><button data-k="false">Ngắn</button></div></div>
-    <button class="primary lb-go" id="lbGo">Bắt đầu</button>
-    <div class="field" id="lbBotField"><span class="lbl">Hoặc chơi với máy</span><div class="chips bots" id="lbBots">
-      <button data-k="easy">🤖 Dễ</button><button data-k="mid">🤖 Vừa</button><button data-k="hard">🤖 Khó</button></div></div>
-    <div class="install" id="lbInstall" hidden><button id="installBtn">Cài lên màn hình chính</button><p class="lb-note" id="installHint"></p></div>
-    <details class="history" id="lbHistory">
-      <summary><span class="lbl">Lịch sử đấu</span><span class="hsum" id="hSum"></span></summary>
-      <div class="hbody">
-        <div class="hopp" id="hOpp"></div>
-        <ol class="hlist" id="hList"></ol>
-        <button class="hclear" id="hClear">Xoá lịch sử</button>
-      </div>
-    </details>
-  </div>
+  </div></div>
+  <div class="sheet" id="sh-join" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Vào phòng</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <label class="lbl" for="lbRoom">Mã phòng 4 số</label>
+    <input class="code-in" id="lbRoom" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" autocomplete="off">
+    <p class="lb-err" id="lbErr" hidden>Mã phòng gồm 4 chữ số.</p>
+    <button class="btn3d blue" id="lbJoin">Vào</button>
+  </div></div>
+  <div class="sheet" id="sh-bot" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Chơi với máy</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="bots" id="lbBots">
+      <button class="btn3d green" data-k="easy">🤖 Dễ<small>Máy ngắm hay lệch</small></button>
+      <button class="btn3d gold" data-k="mid">🤖 Vừa<small>Đánh khá chắc tay</small></button>
+      <button class="btn3d red" data-k="hard">🤖 Khó<small>Gần như không trượt</small></button>
+    </div>
+  </div></div>
+  <div class="sheet" id="sh-history" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Lịch sử đấu</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <div class="hopp" id="hOpp"></div>
+    <ol class="hlist" id="hList"></ol>
+    <button class="hclear" id="hClear">Xoá lịch sử</button>
+  </div></div>
+  <div class="sheet" id="sh-install" hidden><div class="sheet-card">
+    <div class="sheet-head"><h2>Cài như app</h2><button class="sheet-x" aria-label="Đóng">✕</button></div>
+    <p class="lb-note" id="installHint"></p>
+  </div></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1606,6 +1797,13 @@
     vert = false;
     const app = $('app');
     app.classList.toggle('rot', rot);
+    const lb = $('lobby');
+    lb.classList.toggle('rot', rot);
+    lb.style.width = rot ? window.innerHeight + 'px' : '';
+    lb.style.height = rot ? window.innerWidth + 'px' : '';
+    const lbW = rot ? window.innerHeight : window.innerWidth, lbH = rot ? window.innerWidth : window.innerHeight;
+    lb.classList.toggle('short', lbH < 360);
+    lb.classList.toggle('narrow', lbW < 560);
     app.style.width = rot ? window.innerHeight + 'px' : '';
     app.style.height = rot ? window.innerWidth + 'px' : '';
     app.classList.toggle('vert', false); // cột hai bên ở cả hai chiều màn hình
@@ -1929,7 +2127,7 @@
   }
   function renderHistory() {
     const h = loadHistory(), w = h.filter(g => g.win).length;
-    $('hSum').innerHTML = h.length ? `Thắng <b>${w}</b> · Thua ${h.length - w}` : '';
+    $('hSum').innerHTML = h.length ? `Thắng <b>${w}</b> · Thua ${h.length - w}` : 'Chưa có ván';
     const opp = $('hOpp'), list = $('hList'); opp.textContent = ''; list.textContent = '';
     if (!h.length) { const p = document.createElement('p'); p.className = 'hempty'; p.textContent = 'Chưa có ván nào. Chơi qua mạng xong một ván là ván đó được ghi lại ở đây.'; opp.appendChild(p); $('hClear').hidden = true; return; }
     $('hClear').hidden = false;
@@ -1964,10 +2162,8 @@
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; updateInstall(); });
   function updateInstall() {
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const show = isPwaHost && !standalone() && (installEvt || ios);
-    $('lbInstall').hidden = !show;
-    $('installBtn').hidden = !installEvt;
-    $('installHint').textContent = !installEvt && ios ? 'Trên iPhone/iPad: bấm nút Chia sẻ của Safari rồi chọn "Thêm vào MH chính" để chơi toàn màn hình như app.' : '';
+    $('lbInstall').hidden = !(isPwaHost && !standalone() && (installEvt || ios));
+    $('installHint').textContent = 'Trên iPhone/iPad: mở trang bằng Safari, bấm nút Chia sẻ rồi chọn "Thêm vào MH chính". Game sẽ mở toàn màn hình như app.';
   }
   function lockLandscape() {
     try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
@@ -1983,7 +2179,7 @@
     const addPick = (av, label) => {
       const b = document.createElement('button'); b.className = 'pick'; b.dataset.k = avKey(av); b.setAttribute('aria-label', label);
       b.appendChild(avatarNode(av));
-      b.addEventListener('click', () => { prefs.av = av; pressList(balls, avKey(av)); });
+      b.addEventListener('click', () => { prefs.av = av; pressList(balls, avKey(av)); refreshTiles(); });
       balls.appendChild(b); return b;
     };
     const up = document.createElement('button'); up.className = 'pick'; up.setAttribute('aria-label', 'Tải ảnh lên làm avatar');
@@ -2009,7 +2205,7 @@
         URL.revokeObjectURL(url);
         const av = cleanAv({ t: 'img', v: c.toDataURL('image/jpeg', .8) });
         if (!av) return;
-        prefs.av = av; showImgPick(); pressList(balls, avKey(av));
+        prefs.av = av; showImgPick(); pressList(balls, avKey(av)); refreshTiles();
       };
       im.onerror = () => URL.revokeObjectURL(url);
       im.src = url; $('lbFile').value = '';
@@ -2027,28 +2223,36 @@
           prefs[field] = k; pressList(el, k);
           if (field === 'cue') { applyCue(k); paintCuePreview(k); }
           if (field === 'felt' && (!online || mySeat() === 0 || lobbyMode === 'start')) applyFelt(k);
+          refreshTiles();
         });
         el.appendChild(b);
       }
     };
     for (const [v, label] of TIMERS) {
       const b = document.createElement('button'); b.dataset.k = v; b.textContent = label;
-      b.addEventListener('click', () => { prefs.timer = v; pressList($('lbTimers'), v); });
+      b.addEventListener('click', () => { prefs.timer = v; pressList($('lbTimers'), v); refreshTiles(); });
       $('lbTimers').appendChild(b);
     }
     swatch($('lbFelts'), FELTS, 'felt', 'felt');
     swatch($('lbCues'), CUES, 'cue', 'cue');
     $('lbGo').addEventListener('click', lobbyGo);
-    for (const b of $('lbAim').children) b.addEventListener('click', () => { prefs.longAim = b.dataset.k === 'true'; pressList($('lbAim'), String(prefs.longAim)); savePrefs(); });
+    for (const b of $('lbAim').children) b.addEventListener('click', () => { prefs.longAim = b.dataset.k === 'true'; pressList($('lbAim'), String(prefs.longAim)); savePrefs(); refreshTiles(); });
     for (const b of $('lbBots').children) b.addEventListener('click', () => {
       prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs(); applyCue(prefs.cue);
       $('lobby').hidden = true; audio(); startBot(b.dataset.k);
     });
-    $('installBtn').addEventListener('click', async () => {
-      if (!installEvt) return;
+    $('lbInstall').addEventListener('click', async () => {
+      if (!installEvt) { openSheet('sh-install'); return; }
       installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {}
-      installEvt = null; $('lbInstall').hidden = true;
+      installEvt = null; updateInstall();
     });
+    // các bảng trượt từ bên phải
+    document.querySelectorAll('#lobby [data-open]').forEach(b => b.addEventListener('click', () => { if (!b.disabled) openSheet(b.dataset.open); }));
+    document.querySelectorAll('#lobby .sheet').forEach(sh => {
+      sh.addEventListener('click', e => { if (e.target === sh) closeSheets(); });
+      sh.querySelector('.sheet-x').addEventListener('click', closeSheets);
+    });
+    $('lbName').addEventListener('input', refreshTiles);
     const join = () => {
       const code = $('lbRoom').value.replace(/\D/g, '');
       if (code.length !== 4) { $('lbErr').hidden = false; $('lbRoom').focus(); return; }
@@ -2058,7 +2262,31 @@
     $('lbJoin').addEventListener('click', join);
     $('lbRoom').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
     $('lbRoom').addEventListener('input', () => { $('lbErr').hidden = true; });
-    $('lbName').addEventListener('keydown', e => { if (e.key === 'Enter') lobbyGo(); });
+    $('lbName').addEventListener('keydown', e => { if (e.key === 'Enter') $('lbName').blur(); });
+  }
+  function openSheet(id) {
+    document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = sh.id !== id; });
+    if (id === 'sh-join') setTimeout(() => $('lbRoom').focus(), 50);
+  }
+  function closeSheets() { document.querySelectorAll('#lobby .sheet').forEach(sh => { sh.hidden = true; }); refreshTiles(); }
+  // nội dung các ô trên sảnh
+  function refreshTiles() {
+    const av = $('lbAv'); av.textContent = '';
+    const node = avatarNode(prefs.av);
+    if (node) av.appendChild(node); else av.textContent = (($('lbName').value.trim() || 'B')[0] || 'B').toUpperCase();
+    $('tCue').textContent = (CUES[prefs.cue] || CUES.maple).name;
+    const inGame = lobbyMode !== 'start' && online;
+    const f = FELTS[inGame ? S.felt : prefs.felt] || FELTS.navy;
+    $('tFeltChip').style.background = `radial-gradient(ellipse at 50% 40%, ${hexCss(f.felt)}, ${hexCss(f.cush)})`;
+    $('tFelt').textContent = f.name;
+    const tm = inGame ? S.timer : prefs.timer, tl = (TIMERS.find(([v]) => v === tm) || TIMERS[0])[1];
+    const rows = $('tRules'); rows.textContent = '';
+    for (const line of ['⏱ ' + (tm ? tl + ' mỗi lượt' : 'Không giới hạn giờ'), '🎯 Đường ngắm ' + (prefs.longAim ? 'dài' : 'ngắn')]) {
+      const d = document.createElement('span'); d.textContent = line; rows.appendChild(d);
+    }
+    const h = loadHistory(), w = h.filter(g => g.win).length, st = $('lbStats'); st.textContent = '';
+    const chip = (t, cls) => { const sp = document.createElement('span'); sp.textContent = t; if (cls) sp.className = cls; st.appendChild(sp); };
+    if (h.length) { chip('Thắng ' + w, 'w'); chip('Thua ' + (h.length - w)); } else chip('Chưa có ván nào');
   }
   // xem trước gậy 3D trong sảnh
   let cpR = null, cpScene, cpCam, cpGroup, cpMats = [];
@@ -2096,23 +2324,28 @@
   }
   function openLobby(mode) {
     lobbyMode = mode;
+    const start = mode === 'start', net = window.mqtt && !(window.claude && window.claude.use);
     $('lbName').value = prefs.name;
     if (!cpR) initCuePreview();
     paintCuePreview(prefs.cue);
     requestAnimationFrame(cuePreviewLoop);
     pressList($('lbBalls'), avKey(prefs.av)); pressList($('lbFelts'), prefs.felt); pressList($('lbCues'), prefs.cue);
-    const canFelt = mode === 'start' ? !invited() : (!online || mySeat() === 0);
-    $('lbFeltField').hidden = !canFelt;
+    const canFelt = start ? !invited() : (!online || mySeat() === 0);
+    $('tFeltTile').disabled = !canFelt;
     $('lbTimerField').hidden = !canFelt;
-    $('lbBotField').hidden = mode !== 'start';
     pressList($('lbAim'), String(prefs.longAim));
+    pressList($('lbTimers'), start ? prefs.timer : (online ? S.timer : prefs.timer));
     updateInstall();
-    pressList($('lbTimers'), mode === 'start' ? prefs.timer : (online ? S.timer : prefs.timer));
     renderHistory();
-    $('lbRoomField').hidden = !(mode === 'start' && window.mqtt && !(window.claude && window.claude.use) && !invited());
+    $('lbJoinOpen').hidden = !(start && net && !invited());
+    $('lbBotOpen').hidden = !start;
     $('lbErr').hidden = true;
-    $('lbNote').textContent = mode === 'start' && invited() ? 'Bạn được mời vào một bàn. Màu bàn do người tạo phòng chọn.' : '';
-    $('lbGo').textContent = mode !== 'start' ? 'Xong' : invited() || (window.claude && window.claude.use) ? 'Vào bàn' : window.mqtt ? 'Tạo phòng mới' : 'Bắt đầu';
+    const code = (location.hash.match(/^#r-([a-z0-9]+)$/) || [])[1];
+    $('lbNote').textContent = start && invited() ? 'Bạn được mời vào phòng ' + code : '';
+    $('lbGo').innerHTML = !start ? 'Tiếp tục<small>Quay lại bàn đang chơi</small>'
+      : invited() || (window.claude && window.claude.use) ? 'Vào bàn<small>Bàn đang chờ bạn</small>'
+      : net ? 'Tạo phòng<small>Mời bạn bằng mã 4 số</small>' : 'Chơi chung máy<small>Hai người thay phiên trên máy này</small>';
+    closeSheets();
     $('lobby').hidden = false;
   }
   function lobbyGo() {
