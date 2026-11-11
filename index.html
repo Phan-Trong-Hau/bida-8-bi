@@ -352,6 +352,12 @@
   .lobby.narrow .sheet-card { width: 100%; }
   @media (prefers-reduced-motion: reduce) { .sheet, .sheet-card { animation: none; } }
   .reset { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1; color: var(--muted); flex: none; }
+  .roomchip { width: 44px; height: auto; border-radius: 10px; padding: 3px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--brass); }
+  .roomchip small { font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .roomchip b { font-family: var(--display); font-size: 13px; letter-spacing: .04em; }
+  .vert .roomchip { display: none; }
+  /* Android: mép màn hình là vùng vuốt "Quay lại", đẩy nút điều khiển vào trong một chút */
+  @media (pointer: coarse) { .app { padding-left: max(26px, env(safe-area-inset-left, 0px)); padding-right: max(26px, env(safe-area-inset-right, 0px)); } }
   .reset.waiting { color: var(--brass); border-color: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(216,169,79,.25); } }
   .spin {
@@ -471,6 +477,7 @@
   <div class="col" id="colL">
     <button class="reset" id="resetBtn" aria-label="Xếp lại bàn" title="Xếp lại bàn">⟲</button>
     <button class="reset" id="gearBtn" aria-label="Tên, avatar, màu bàn và gậy" title="Tuỳ chỉnh">⚙&#xFE0E;</button>
+    <button class="reset roomchip" id="roomChip" hidden aria-label="Mã phòng — bấm để mời bạn"><small>Phòng</small><b id="roomCode"></b></button>
     <div class="who" id="who0"><div class="avatar" id="av0">1</div><span class="wins" id="wins0">0</span><span class="clock" id="clock0" hidden></span><span class="net" id="net0" hidden></span><div class="rack" id="rack0"></div></div>
     <div class="pull" id="pull" role="slider" tabindex="0" aria-label="Lực đánh — kéo rồi thả để đánh" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="pull-fill" id="pullFill"></div>
@@ -1286,9 +1293,13 @@
   }
   function initRoom() {
     if (!window.mqtt) return;
-    try { myId = sessionStorage.getItem('bida.me'); } catch (e) {}
-    if (!myId) { myId = 'u' + rid() + rid(); try { sessionStorage.setItem('bida.me', myId); } catch (e) {} }
     const m = location.hash.match(/^#r-([a-z0-9]+)$/);
+    try { myId = sessionStorage.getItem('bida.me'); } catch (e) {}
+    // mở lại app (phiên mới) vào đúng phòng cũ: dùng lại mã người chơi cũ để giữ ghế
+    const lr = lastRoom();
+    if (!myId && m && lr && lr.code === m[1]) myId = lr.id;
+    if (!myId) myId = 'u' + rid() + rid();
+    try { sessionStorage.setItem('bida.me', myId); } catch (e) {}
     creating = !m;
     roomId = m ? m[1] : code4();
     const enter = () => {
@@ -1299,7 +1310,7 @@
         clearTimeout(createTimer);
         createTimer = setTimeout(() => {
           if (gotState) return;
-          gotState = true; online = true; synced = true; creating = false; hideLoading();
+          gotState = true; online = true; synced = true; creating = false; hideLoading(); rememberRoom();
           claimIfFree();
           commit({ felt: prefs.felt, timer: prefs.timer });
           showInvite();
@@ -1318,6 +1329,7 @@
     joinedAt = Date.now();
     setInterval(() => { if (mq.connected && gotState) mq.publish(topic('hb'), JSON.stringify({ from: myId }), { qos: 0 }); }, 4000);
     setInterval(renderPresence, 2000);
+    setInterval(() => { if (gotState && mySeat() >= 0) rememberRoom(); }, 60000);
     mq.on('connect', () => {
       if (wasOffline) { wasOffline = false; popup({ kind: 'back' }); }
       enter();
@@ -1340,7 +1352,7 @@
           return;
         }
         if (!gotState) {
-          gotState = true; online = true; synced = false;
+          gotState = true; online = true; synced = false; rememberRoom();
           applyRemote(normalize(msg.s)); hideLoading();
           claimIfFree();
           if (S.phase === 'over') { oldOver = S.event.id; renderUI(); } else popup(joinEvent());
@@ -1361,6 +1373,16 @@
     loadTimer = setTimeout(() => { $('loadingText').textContent = 'Mạng hơi chậm, vẫn đang kết nối…'; }, 10000);
   }
   function hideLoading() { clearTimeout(loadTimer); $('loading').hidden = true; }
+  function lastRoom() {
+    try { const r = JSON.parse(localStorage.getItem('bida.room')); if (r && typeof r.code === 'string' && typeof r.id === 'string' && Date.now() - r.t < 3 * 3600e3) return r; } catch (e) {}
+    return null;
+  }
+  function rememberRoom() {
+    try { localStorage.setItem('bida.room', JSON.stringify({ code: roomId, id: myId, t: Date.now() })); } catch (e) {}
+    $('roomCode').textContent = roomId; $('roomChip').hidden = false;
+  }
+  function forgetRoom() { try { localStorage.removeItem('bida.room'); } catch (e) {} }
+  $('roomChip').addEventListener('click', showInvite);
   function showInvite() {
     $('inviteCode').textContent = roomId;
     $('inviteLink').value = roomLink();
@@ -1879,6 +1901,7 @@
       case 'joined': main = cap(n) + ' đã vào bàn'; break;
       case 'back': main = 'Đã kết nối lại'; break;
       case 'left': main = 'Mất kết nối'; sub = 'Đang thử kết nối lại…'; foul = true; break;
+      case 'stay': main = 'Bạn vẫn đang ở trong bàn'; sub = 'Muốn rời bàn thì bấm ⚙ để về sảnh'; break;
       case 'noroom': main = 'Đang tìm phòng…'; break;
       case 'sent': main = 'Đã gửi yêu cầu xếp lại bàn'; sub = 'Chờ ' + n + ' đồng ý'; break;
       case 'cancel': main = 'Đã huỷ yêu cầu xếp lại bàn'; break;
@@ -2114,7 +2137,7 @@
   $('cfYes').addEventListener('click', () => { $('confirmReset').hidden = true; pressReset(); });
   $('againBtn').addEventListener('click', pressReset);
   // về sảnh: bỏ mã phòng cũ khỏi đường link rồi tải lại
-  $('homeBtn').addEventListener('click', () => { history.replaceState(null, '', location.pathname + location.search); location.reload(); });
+  $('homeBtn').addEventListener('click', () => { forgetRoom(); history.replaceState(null, '', location.pathname + location.search); location.reload(); });
   $('yesBtn').addEventListener('click', pressReset);
   $('noBtn').addEventListener('click', declineReset);
 
@@ -2455,7 +2478,7 @@
     swatch($('lbFelts'), FELTS, 'felt', 'felt');
     swatch($('lbCues'), CUES, 'cue', 'cue');
     $('lbGo').addEventListener('click', lobbyGo);
-    $('lbNew').addEventListener('click', () => { history.replaceState(null, '', location.pathname + location.search); lobbyGo(); });
+    $('lbNew').addEventListener('click', () => { forgetRoom(); history.replaceState(null, '', location.pathname + location.search); lobbyGo(); });
     for (const b of $('lbAim').children) b.addEventListener('click', () => { prefs.longAim = b.dataset.k === 'true'; pressList($('lbAim'), String(prefs.longAim)); savePrefs(); refreshTiles(); });
     for (const b of $('lbBots').children) b.addEventListener('click', () => {
       prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs(); applyCue(prefs.cue);
@@ -2594,6 +2617,18 @@
     } else { S.felt = prefs.felt; S.timer = prefs.timer; renderUI(); }
   }
   $('gearBtn').addEventListener('click', () => openLobby('settings'));
+
+  // mở lại app sau khi lỡ thoát: gợi ý vào lại phòng đang chơi
+  { const lr = lastRoom(); if (lr && !location.hash && !(window.claude && window.claude.use)) history.replaceState(null, '', '#r-' + lr.code); }
+  // Android: vuốt từ mép màn hình là lệnh "Quay lại". Khi đang ở bàn, chặn lại để không văng khỏi phòng.
+  const inGame = () => started && $('lobby').hidden;
+  function armBack() { if (inGame() && !(history.state && history.state.bida)) history.pushState({ bida: 1 }, '', location.href); }
+  document.addEventListener('pointerdown', armBack, true);
+  window.addEventListener('popstate', () => {
+    if (!inGame()) return;
+    history.pushState({ bida: 1 }, '', location.href);
+    popup({ kind: 'stay' });
+  });
 
   S = freshState(null);
   S.felt = prefs.felt;

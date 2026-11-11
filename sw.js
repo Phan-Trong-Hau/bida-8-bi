@@ -1,6 +1,6 @@
 // Service worker: trang và file của game luôn lấy bản mới nhất từ mạng (có bản lưu dự phòng khi mất mạng);
 // thư viện từ CDN và font thì lấy từ bộ nhớ đệm cho nhanh.
-const CACHE = 'bida8-v4';
+const CACHE = 'bida8-v5';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
