@@ -2152,22 +2152,38 @@
   });
   $('cfNo').addEventListener('click', () => { $('confirmReset').hidden = true; });
   // nút thoát: đang chơi dở thì hỏi lại trước khi rời bàn
-  function leaveTable() {
+  // rời bàn rồi tải lại trang; go: việc làm ngay sau khi tải lại ('new' | 'join' | 'bot:<mức>')
+  function leaveTable(go, hash) {
     try { if (mq && mq.connected) mq.publish(topic('hb'), JSON.stringify({ from: myId, off: true }), { qos: 0 }); } catch (e) {}
     forgetRoom();
-    history.replaceState(null, '', location.pathname + location.search);
+    try { if (go) sessionStorage.setItem('bida.go', go); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search + (hash || ''));
     setTimeout(() => location.reload(), 150);
   }
-  $('exitBtn').addEventListener('click', () => {
-    if (S.phase === 'over' || (online && mySeat() < 0)) { leaveTable(); return; }
+  const needLeaveAsk = () => started && S.phase !== 'over' && !(online && mySeat() < 0);
+  let pendingLeave = null, leaveFromLobby = false;
+  // từ màn cài đặt khi đang có bàn: đổi sang ván khác (hỏi lại nếu ván đang chơi dở)
+  function switchGame(go, hash) {
+    if (lobbyMode === 'start') return false;
+    if (!needLeaveAsk()) { leaveTable(go, hash); return true; }
+    pendingLeave = () => leaveTable(go, hash); leaveFromLobby = true;
+    $('lobby').hidden = true; askLeave();
+    return true;
+  }
+  function askLeave() {
     const oid = online && mySeat() >= 0 ? S.seats['p' + (1 - mySeat())] : null;
     $('exitNote').textContent = online
       ? (oid ? 'Ván đang chơi dở. ' + cap(whoName(1 - mySeat())) + ' sẽ thấy bạn đã rời bàn.' : 'Phòng ' + roomId + ' sẽ bị bỏ lại.')
       : 'Ván đang chơi sẽ không được lưu lại.';
     $('confirmExit').hidden = false;
+  }
+  $('exitBtn').addEventListener('click', () => {
+    pendingLeave = () => leaveTable(); leaveFromLobby = false;
+    if (!needLeaveAsk()) { leaveTable(); return; }
+    askLeave();
   });
-  $('exNo').addEventListener('click', () => { $('confirmExit').hidden = true; });
-  $('exYes').addEventListener('click', () => { $('confirmExit').hidden = true; leaveTable(); });
+  $('exNo').addEventListener('click', () => { $('confirmExit').hidden = true; if (leaveFromLobby) openLobby('settings'); });
+  $('exYes').addEventListener('click', () => { $('confirmExit').hidden = true; if (pendingLeave) pendingLeave(); });
   $('cfYes').addEventListener('click', () => { $('confirmReset').hidden = true; pressReset(); });
   $('againBtn').addEventListener('click', pressReset);
   // về sảnh: bỏ mã phòng cũ khỏi đường link rồi tải lại
@@ -2512,10 +2528,11 @@
     swatch($('lbFelts'), FELTS, 'felt', 'felt');
     swatch($('lbCues'), CUES, 'cue', 'cue');
     $('lbGo').addEventListener('click', lobbyGo);
-    $('lbNew').addEventListener('click', () => { forgetRoom(); history.replaceState(null, '', location.pathname + location.search); lobbyGo(); });
+    $('lbNew').addEventListener('click', () => { if (switchGame('new')) return; forgetRoom(); history.replaceState(null, '', location.pathname + location.search); lobbyGo(); });
     for (const b of $('lbAim').children) b.addEventListener('click', () => { prefs.longAim = b.dataset.k === 'true'; pressList($('lbAim'), String(prefs.longAim)); savePrefs(); refreshTiles(); });
     for (const b of $('lbBots').children) b.addEventListener('click', () => {
       prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs(); applyCue(prefs.cue);
+      if (switchGame('bot:' + b.dataset.k)) return;
       $('lobby').hidden = true; audio(); startBot(b.dataset.k);
     });
     $('lbInstall').addEventListener('click', async () => {
@@ -2533,6 +2550,8 @@
     const join = () => {
       const code = $('lbRoom').value.replace(/\D/g, '');
       if (code.length !== 4) { $('lbErr').hidden = false; $('lbRoom').focus(); return; }
+      prefs.name = $('lbName').value.trim().slice(0, 16); savePrefs();
+      if (switchGame('join', '#r-' + code)) return;
       history.replaceState(null, '', '#r-' + code);
       lobbyGo();
     };
@@ -2620,10 +2639,11 @@
     pressList($('lbTimers'), start ? prefs.timer : (online ? S.timer : prefs.timer));
     updateInstall();
     renderHistory();
-    $('lbJoinOpen').hidden = !(start && net);
-    $('lbNew').hidden = !(start && net && invited());
-    $('lbJoinOpen').firstChild.textContent = invited() ? 'Vào phòng khác' : 'Vào phòng';
-    $('lbBotOpen').hidden = !start;
+    $('lbJoinOpen').hidden = !net;
+    $('lbNew').hidden = !(net && (!start || invited()));
+    $('lbNew').innerHTML = 'Tạo phòng mới<small>' + (start ? 'Bỏ phòng cũ, lấy mã mới' : 'Rời bàn này, lấy mã mới') + '</small>';
+    $('lbJoinOpen').firstChild.textContent = !start || invited() ? 'Vào phòng khác' : 'Vào phòng';
+    $('lbBotOpen').hidden = false;
     $('lbErr').hidden = true;
     const code = (location.hash.match(/^#r-([a-z0-9]+)$/) || [])[1];
     $('lbNote').textContent = '';
@@ -2681,6 +2701,11 @@
   requestAnimationFrame(loop);
   buildLobby();
   openLobby('start');
+  {
+    let go = null; try { go = sessionStorage.getItem('bida.go'); sessionStorage.removeItem('bida.go'); } catch (e) {}
+    if (go === 'new' || go === 'join') lobbyGo();
+    else if (go && /^bot:(easy|mid|hard)$/.test(go)) { $('lobby').hidden = true; startBot(go.slice(4)); }
+  }
 })();
 </script>
 <!-- ARTIFACT:END -->
